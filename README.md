@@ -1,72 +1,80 @@
-# Kiokuko for Hermes Agent
+# Kiokuko(記憶庫) for Hermes Agent
 
-Hermes専用の記憶pluginです。compact時と会話終了時に、プロジェクト内のファイル・設定で確認できた項目を記憶として保存します。検証済みの記憶はプロジェクト内で優先して再利用し、`kioku-curation`で選んだ項目をGlobalへ共有できます。本人・会話ごとの分離は維持します。
+[日本語版](README_ja.md)
 
-通常のモデル提案は承認待ちです。自動採用は実ファイルと照合できる設定値・記載内容に限り、推論や教訓を「事実」として自動確定しません。
+Kiokuko(記憶庫) is a memory plugin for Hermes Agent. It separates memories by person, conversation, and workspace, and keeps model-generated proposals pending until a human approves them.
 
-Python 3.11–3.13、SQLite、Hermes 0.21系列を対象にしています。統合テストの固定コミットと検証範囲は[検証記録](docs/verification.md)を参照してください。
+During compaction and at the end of a conversation, Kiokuko stores only facts that can be rechecked against project files or configuration. The database is stored at `$HERMES_HOME/kiokuko/kiokuko.db`.
 
-## 導入
+Supported environments are Python 3.11–3.13 and Hermes 0.21.
 
-Hermesと同じPython環境で、このcheckoutからインストールします。
+## Install
+
+Install Kiokuko from PyPI into the same Python environment used by Hermes. This is the standard Hermes installation layout:
 
 ```sh
-python -m pip install .
-python -m hermes_kiokuko setup
-hermes kiokuko doctor
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+"$HERMES_PY" -m pip install --upgrade hermes-kiokuko
 ```
 
-setupは対象Hermes profileで一般pluginを有効にし、nativeの`MEMORY.md`と`USER.md`を両方無効にします。既存ファイルは変更・削除・自動importしません。設定後はagentを再起動してください。
+Initialize the profile:
 
-## 保存と承認
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes"
+"$HERMES_PY" -m hermes_kiokuko setup
+"$HERMES_PY" -m hermes_kiokuko doctor
+```
 
-通常のCLI会話、または本人を確認できるDMで、メッセージ全体を次の形式にすると原文を保存します。本文は600文字までです。
+When `doctor` reports `ok: true`, restart Hermes. Native `MEMORY.md` and `USER.md` are disabled, but existing files are preserved.
+
+## When the profile is wrong
+
+If you see `active profile is 'main'` together with `Falling back to .../.hermes`, set the active profile explicitly and run setup again:
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+"$HERMES_PY" -m hermes_kiokuko setup
+"$HERMES_PY" -m hermes_kiokuko doctor
+```
+
+`HERMES_HOME` defines the profile boundary. Use the same value that Hermes uses to start the target profile; each profile has separate configuration, database, and sessions.
+
+## Update
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+"$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+"$HERMES_PY" -m hermes_kiokuko doctor
+```
+
+Restart Hermes after updating. Python 3.14 is outside the current support range.
+
+## Explicit storage and approval
+
+Send the entire message in this form to store the original text immediately. The body is limited to 600 characters.
 
 ```text
 @kiokuko remember --scope principal
-返答は日本語にする。
+Reply in Japanese.
 ```
 
-モデルの提案や自由な自然文の「覚えて」は承認待ちになります。
+Model proposals and natural-language requests such as “remember this” become pending candidates. Review and approve them from the CLI:
 
 ```sh
-hermes kiokuko pending
-hermes kiokuko approve CANDIDATE_ID
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+"$HERMES_PY" -m hermes_kiokuko pending
+"$HERMES_PY" -m hermes_kiokuko approve CANDIDATE_ID
 ```
 
-承認画面でclaim・scope・根拠・更新対象revisionを確認します。表示後に内容が変わった場合は承認を拒否します。
-
-```text
-@kiokuko correct mem_ID --expected-revision 1
-返答は英語にする。
-```
-
-```text
-@kiokuko forget mem_ID --expected-revision 2
-```
-
-訂正・撤回は`continue`などの短い入力でも再提示します。過去のHermes履歴を書き換える機能ではありません。
-
-## 運用
-
-プロジェクトのディレクトリで実行すると、検証済み記憶を再確認して選べます。
+`kioku-curation` rechecks verified project memories and lets you share selected items as Global memories within the same profile.
 
 ```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+"$HERMES_PY" -m hermes_kiokuko curation
+# Or, when the venv bin directory is on PATH:
 kioku-curation
-# または hermes kioku-curation
 ```
 
-番号でチェックを切り替え、`s`で共有内容を確認、`share`で確定します。Globalは**現在のHermes profileの全利用者・全プロジェクト**への共有です。元のプロジェクト記憶は残ります。
-
-検証できる内容、compact後の処理時点、操作例は[記憶の検証とcuration](docs/curation.md)を参照してください。
-
-```sh
-hermes kiokuko status
-hermes kiokuko show ENTRY_ID
-hermes kiokuko backup /path/to/new-backup-directory
-hermes kiokuko purge ENTRY_ID
-```
-
-purgeは対象確認後に、稼働DB内の本文・根拠・候補・検索データを削除します。履歴の訂正に必要な最小metadataは残ります。Hermes履歴、既存backup/export、ディスクの物理消去は対象外です。
-
-[運用・境界](docs/operations.md) · [実装仕様](PLAN.md) · [テストの実行](docs/verification.md)
+See [curation details](docs/curation.md), [operational boundaries](docs/operations.md), and [verification](docs/verification.md).
