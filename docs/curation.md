@@ -36,6 +36,30 @@ compact前と会話終了時に、完了したターンから短い確認項目�
 
 ## kioku-curation
 
+### 会話内のslash command（v0.1.1以降）
+
+対象プロジェクトで起動したHermesの対話CLIから操作できます。stdin入力やLLM経由の承認は使いません。
+
+```text
+/kioku-curation                 根拠を再確認して候補を表示
+/kioku-curation select 1 3      番号のチェックを切替
+/kioku-curation all             全選択
+/kioku-curation none            選択解除
+/kioku-curation show            現在の選択を表示
+/kioku-curation share           選択した本文と共有先を表示
+/kioku-curation confirm CODE    表示された確認コードで確定
+/kioku-curation cancel          共有せず終了
+/kioku-curation help            操作一覧
+```
+
+`[ ]`と`[x]`は文字によるチェック表示です。各操作をslash commandとして送ります。`share`に表示された本文と共有先を確認し、その画面のコードを`CODE`に指定してください。番号だけ・`yes`だけの通常メッセージでは採用しません。選択変更や再度の`share`は以前のコードを無効にします。
+
+候補はprocess内だけで保持し、表示から15分で期限切れになります。session・generation・profile・workspaceが変わった場合、再起動した場合にも一覧からやり直します。承認時に根拠とrevisionを再検証し、変更や削除があれば全件中止して一覧の再確認を案内します。DBがbusyなら選択を保持し、`share`から再試行できます。再表示・選択・共有の結果は各コマンドの応答で返します。
+
+共有は既存の管理者CLIと同じ権限です。GatewayのDM・groupでは候補を開示せず端末操作を案内します。固定版Hermesのslash handlerには引数文字列しか渡らず、Gatewayでは本人情報のbind前に呼ばれるためです。対話CLIはhostのprofile別PluginManagerに接続されたCLI参照とsession IDを確認します。稼働中のagent、delegation、background review、cron、本人を確認できない経路では実行しません。非同期event loop内の呼出しも拒否します。この内部host契約が変わった場合は再検証が必要です。
+
+### 端末コマンド
+
 インストールを更新した同じPython環境で、対象プロジェクトのディレクトリから起動します。
 
 ```sh

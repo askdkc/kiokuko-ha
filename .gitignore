@@ -10,3 +10,4 @@ build/
 .coverage
 .codex/
 .release-venv312
+pip-publish.sh

@@ -43,13 +43,25 @@ export HERMES_HOME="$HOME/.hermes/profiles/main"
 
 ## Update
 
+With v0.1.1 or later installed, run these commands inside an interactive Hermes CLI session:
+
+```text
+/kiokuko-update
+/kiokuko-update status
+```
+
+The update runs in the background using Hermes's own Python interpreter, with the current profile explicitly passed as `HERMES_HOME`. It upgrades the PyPI package `hermes-kiokuko` (the repository is named `kiokuko-ha`). Profiles sharing that Python environment receive the same package update; profile settings and memory databases are left intact. Use `/kiokuko-update retry` after a failure. This administrative command is available in the local interactive CLI, not Telegram/Discord chats.
+
+For the first upgrade from v0.1.0, or to update from a terminal:
+
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main" # Use your actual profile path
 "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
-Restart Hermes after updating. Python 3.14 is outside the current support range.
+Wait for the update to finish, then restart the Hermes process. For Telegram/Discord, restart the Hermes Gateway process serving those chats: a new chat session does not reload the installed plugin code. No OS reboot is needed. Python 3.14 is outside the current support range.
 
 ## Explicit storage and approval
 
@@ -69,6 +81,17 @@ HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 ```
 
 `kioku-curation` rechecks verified project memories and lets you share selected items as Global memories within the same profile.
+
+From an interactive Hermes CLI session in the project directory (v0.1.1+):
+
+```text
+/kioku-curation
+/kioku-curation select 1 3
+/kioku-curation share
+/kioku-curation confirm CODE
+```
+
+Replace `CODE` with the confirmation code shown after `share`. Use `cancel` to exit without sharing. Global memories are shared with every user and project in the profile. Gateway chats (DM/group) cannot use this administrative flow; run it from the local CLI. The terminal command is also available:
 
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"

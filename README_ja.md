@@ -43,13 +43,25 @@ export HERMES_HOME="$HOME/.hermes/profiles/main"
 
 ## 更新
 
+v0.1.1以降では、Hermesの対話CLI内から更新できます。
+
+```text
+/kiokuko-update
+/kiokuko-update status
+```
+
+Hermesを実行しているPythonを使い、現在のprofileを`HERMES_HOME`で明示してバックグラウンド更新します。更新対象はPyPIの`hermes-kiokuko`です（リポジトリ名は`kiokuko-ha`）。同じPython環境を共有するprofileには同じパッケージ更新が適用されます。profileの設定・記憶DBは変更しません。失敗時は`/kiokuko-update retry`で再試行できます。この管理コマンドはローカルの対話CLI専用で、Telegram・Discordのチャットからは実行できません。
+
+v0.1.0からの初回更新や、端末から更新する場合：
+
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main" # 実際のprofileパスに合わせる
 "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
-更新後はHermesを再起動します。Python 3.14は現在の対応範囲外です。
+更新完了を確認してからHermesプロセスを再起動します。Telegram・Discordで使う場合は、そのチャットを担当するHermes Gatewayプロセスを再起動してください。新しい会話セッションだけではpluginコードが再読込されません。OSの再起動は不要です。Python 3.14は現在の対応範囲外です。
 
 ## 明示保存と承認
 
@@ -69,6 +81,17 @@ HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 ```
 
 `kioku-curation`では、検証済みのプロジェクト記憶を再確認し、同じprofile内のGlobal記憶へ共有する項目を選べます。
+
+v0.1.1以降は、対象プロジェクトで起動したHermesの対話CLI内から操作できます。
+
+```text
+/kioku-curation
+/kioku-curation select 1 3
+/kioku-curation share
+/kioku-curation confirm CODE
+```
+
+`CODE`は`share`後に表示される確認コードに置き換えます。`cancel`で共有せず終了します。Global記憶は同じprofileの全利用者・全プロジェクトへ共有されます。GatewayのDM・groupではこの管理操作を実行できないため、ローカルの対話CLIを使ってください。端末コマンドも引き続き利用できます。
 
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"

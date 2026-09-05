@@ -6,7 +6,7 @@
 
 | 環境 | 対象 | 結果 |
 |---|---|---|
-| macOS arm64 / Python 3.12.13 | unit・SQLite integration・Hermes integration | 83 passed |
+| macOS arm64 / Python 3.12.13 | unit・SQLite integration・Hermes integration（v0.1.1） | 107 passed |
 | macOS arm64 / Python 3.11.15 | unit・SQLite integration | 69 passed |
 | macOS arm64 / Python 3.13.14 | unit・SQLite integration | 69 passed |
 | distribution | sdistからwheel作成、SQL・plugin metadata・二つのentry point | 検証済み |
@@ -22,6 +22,8 @@ Hermesは`NousResearch/hermes-agent@13e72fb205b735df679e0fd5f5996a34ac4accc6`（
 - **SQLite**：承認前のactive化拒否、revision競合、rewind、遅延session処理、履歴のscope、FTS/n-gram fallback、圧縮相当のmarker欠落、訂正通知、同時初期化、purgeと遅延job、backup/restore、異常DBの非破壊拒否を検証。
 - **検証付きcompaction**：実Hermesの`_pre_compress_memory_context`→MemoryManager→providerとsession endを通過。抽出モデル応答は固定し、実ファイルを照合。誤値・型違い・未認証履歴・未完了turn・rewind・古いrootへのCWD混線・symlink・secretの拒否、要約の誤記、根拠変更後の検索除外と無効化、purge後の再作成拒否を検証。
 - **curation**：インストールした`kioku-curation`を子processから起動し、実際の標準入力で選択・無効番号・確認から戻る・採用を実行。取消・EOF・Ctrl-C、共有範囲、batch競合時の全件rollback、候補更新後の有効な選択維持も試験。画面readerを用いた実機評価は未実施。
+- **slash curation（v0.1.1）**：固定Hermesのplugin discoveryと`HermesCLI.process_command()`から一覧・番号選択・確認コード・採用を実行。重複確定、選択変更、期限切れ、session・workspace・profile・principal変更、rewind、根拠変更・訂正・purge時の全件中止、DB busy時の選択保持を試験。実Gatewayのplugin dispatcherによる拒否と、bindされたDM/groupの拒否を確認。対話CLI参照・稼働状態・非同期呼出しの境界を検証。端末画面を操作した実機評価やGatewayの実ネットワーク配送は未実施。
+- **slash update（v0.1.1）**：固定Hermesへの登録、現在profileとPythonの固定、重複開始・venv lockによる競合拒否、失敗後のretry、Gateway拒否を試験。一時venvの模擬pipを実subprocessで起動し、引数・`HERMES_HOME`・pip設定の隔離・version確認を検証。異常終了・timeout・起動失敗を成功扱いせずlockを解放することを確認。PyPIからの実インストールや既存Hermes環境の更新はこの検証では実行していません。
 - **追加migration**：v1の記憶とkeyを保持してv2へ移行し、v1 checksum不一致では移行しないことを検証。
 
 会話ループのLLM HTTP通信と、compaction用の追加モデル呼び出しを決定的な応答へ置換しています。実モデルの抽出精度・網羅性・訂正への追従は測定していません。Gatewayの実ネットワーク接続、Telegram等の配送、Linux、Python 3.11/3.13上の全Hermes依存環境、performance目標は未検証です。テストは一時profileを使い、既存ユーザーprofileを変更しません。

@@ -19,3 +19,11 @@ def register(ctx):
     ctx.register_cli_command("kiokuko", "Kiokuko memory management", setup_parser, cli_handler)
     from .curation import setup_parser as curation_parser
     ctx.register_cli_command("kioku-curation", "検証済みのプロジェクト記憶を選んでGlobalへ共有", curation_parser, cli_handler)
+    from .slash_curation import SlashCuration
+    ctx.register_command("kioku-curation", SlashCuration(ctx),
+                         description="検証済み記憶の選択・Global共有（対話CLI）",
+                         args_hint="[show|select 1 3|all|none|share|confirm CODE|cancel|help]")
+    from .slash_update import SlashUpdate
+    ctx.register_command("kiokuko-update", SlashUpdate(ctx),
+                         description="現在のHermes用Python環境のKiokukoを更新（対話CLI）",
+                         args_hint="[status|retry|help]")

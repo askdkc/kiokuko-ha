@@ -79,3 +79,13 @@ purgeは単一transactionでentry、そのrevision、evidence、昇格済み・�
 backupはSQLite backup APIでDBとprofile keyを一組にし、manifestとdigestを記録します。既存の出力先は上書きしません。restoreは同じprofileに限り、稼働holderや未処理のlive WALがあれば拒否します。DBの破損やchecksum不一致をresetで隠しません。
 
 `import-native-user-profile PATH --principal PRINCIPAL_ID`は既知の内部principal IDを必要とします。対象と内容量を確認し、検査済みの短い候補としてimportします。自動昇格しません。
+
+## パッケージ更新（v0.1.1以降）
+
+対話CLIの`/kiokuko-update`で更新を開始し、`/kiokuko-update status`で結果を確認します。開始時点の`sys.executable`とprofileの絶対パスを固定し、子processへ`HERMES_HOME`を渡します。対象パッケージは`hermes-kiokuko`、取得元はPyPI、配布形式はwheelに限定します。環境変数やpip設定による別prefix・別indexへの変更は引き継ぎません。独自indexを必要とする環境では端末から更新してください。
+
+同じPython環境を使うprofileは同じ更新を受けます。更新処理は設定・記憶DBを変更しません。対象はvenv内に限定し、pipが必要です。pip未導入なら、そのvenvのPythonで`-m ensurepip --upgrade`を実行してから再試行してください。system Pythonの制約を解除するオプションは使いません。
+
+process内の重複開始を防ぎ、venv直下の`.kiokuko-update.lock`で別processの同コマンドとも排他します。手動pipや他の更新ツールとの排他は保証しません。インストールは最大180秒、インストール済みversion確認は最大15秒です。処理中に通常終了するとworkerの終了を待つため、statusで完了を確認してから終了してください。強制終了・失敗・timeout時の自動rollbackはなく、部分的な更新の可能性を表示します。`retry`は失敗後だけ再実行し、成功後は再起動を案内します。生のpip出力は会話やDBへ保存しません。詳細調査は同じPythonで端末からpipを実行します。
+
+新規sessionはGatewayプロセス内で作られ、読み込んだPython moduleやplugin登録が残ります。Telegram・Discordでも新しい会話だけでは更新が反映されないため、その接続を担当するGatewayプロセスを再起動してください。OSの再起動は不要です。チャット経由の更新権限を確認できないため、このコマンド自体はGatewayからの実行を拒否します。

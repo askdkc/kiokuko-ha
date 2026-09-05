@@ -31,7 +31,7 @@ def check_host(home: Path | None = None, *, require_config=True) -> None:
                 "rewound" not in inspect.signature(MemoryProvider.on_session_switch).parameters:
             raise KiokukoError("HOST_CONTRACT_MISMATCH")
         if not all(callable(getattr(PluginContext, name, None)) for name in
-                   ("register_hook", "register_middleware", "register_tool", "register_cli_command")):
+                   ("register_hook", "register_middleware", "register_tool", "register_cli_command", "register_command")):
             raise KiokukoError("HOST_CONTRACT_MISMATCH")
         if not callable(run_tool_execution_middleware) or not callable(turn_context.compose_user_api_content):
             raise KiokukoError("HOST_CONTRACT_MISMATCH")

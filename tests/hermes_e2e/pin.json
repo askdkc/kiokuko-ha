@@ -15,6 +15,10 @@
     "hermes_cli/middleware.py": "62b1c1b6aa2e736c852ffd4dc551b9325ae4d41debafb6ece1169739fb6ce228",
     "gateway/session_context.py": "71a084d75490a938bd163a66e9f6ba2035afd02d07a4c53863497c00f2eaa042",
     "model_tools.py": "8af21e3a3ec73444f9612d1d17640c62f5b19b8d201ce0cb836e79f0ccdddc86",
-    "hermes_cli/__init__.py": "28e5537b48fc6cc1d34dada0bbf676a6e4b6ecf7b233986f42b266475e2f8ebd"
+    "hermes_cli/__init__.py": "28e5537b48fc6cc1d34dada0bbf676a6e4b6ecf7b233986f42b266475e2f8ebd",
+    "cli.py": "1acf08b2002d1e9bba58360986d53a7f1f7d6724a79b6dbe09c77fc74a160151",
+    "hermes_cli/cli_tui_mixin.py": "69b4d5265871450f5b13edac5c55fbe9498c79d00d65a2724861b451d307b35a",
+    "gateway/run_inbound.py": "8b983ea50a991d5ec8512062f8baea73a3e4a9aec8a6093fe7b19004f0f7d45c",
+    "agent/runtime_cwd.py": "4b72f7680b76f965325dd3555bbfc5ef328d99f312d19c057ec9cd1cc15ab71e"
   }
 }
