@@ -1,0 +1,20 @@
+{
+  "repository": "NousResearch/hermes-agent",
+  "commit": "13e72fb205b735df679e0fd5f5996a34ac4accc6",
+  "archive_sha256": "7d4249e5dec3816772e6c865f2797d346bd4b83dd76af6e111a54ebc04c6ad72",
+  "files": {
+    "agent/auxiliary_client.py": "856c39b1cecd1d7a5d38ff1c39cdd439eadadf485dcaea1fc61d8d52626ea0ac",
+    "agent/conversation_compression.py": "b4641046c1975411a2c1b74b8126390f9692f6cc1748b8ea28e077f9eaa19967",
+    "agent/turn_context.py": "b4c2891c330e85fb04de743234fa03856d5cfd1490d679f6f082eeed39f1b136",
+    "agent/memory_manager.py": "3299cf57c33b811c3cbed002a9f077f555dad18a274e79ae1607344ec0f62845",
+    "agent/memory_provider.py": "8970de8fd26dd6829220261d720fc0bb7abc9c162a54a654275b56f5ee5a267c",
+    "agent/tool_executor.py": "409b9f349c58376365ef4f9a94f374d5886e9b387cc257b1e9d50fdcb0495d61",
+    "agent/inline_tool_executors.py": "91ccfeb7550470473b78ae7d7501f44e7b14cdd816bdd802a68b3c9d08005d9d",
+    "hermes_cli/plugins.py": "546c692e3f251bc8ef6920c0c1cfc94a26a892b4076c45aa75616e85dc48680b",
+    "hermes_cli/plugins_dispatch.py": "bccbee91f62a4abae4f176c89eb64b8dbc232a0ad71a7467f51d9da31ee700b5",
+    "hermes_cli/middleware.py": "62b1c1b6aa2e736c852ffd4dc551b9325ae4d41debafb6ece1169739fb6ce228",
+    "gateway/session_context.py": "71a084d75490a938bd163a66e9f6ba2035afd02d07a4c53863497c00f2eaa042",
+    "model_tools.py": "8af21e3a3ec73444f9612d1d17640c62f5b19b8d201ce0cb836e79f0ccdddc86",
+    "hermes_cli/__init__.py": "28e5537b48fc6cc1d34dada0bbf676a6e4b6ecf7b233986f42b266475e2f8ebd"
+  }
+}

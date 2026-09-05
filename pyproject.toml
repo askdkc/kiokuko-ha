@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-kiokuko"
+version = "0.1.0"
+description = "Scoped, human-approved memory for Hermes Agent"
+readme = "README.md"
+authors = [{name = "dkc"}]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<3.14"
+dependencies = ["PyYAML>=6,<7"]
+
+[project.scripts]
+kioku-curation = "hermes_kiokuko.curation:main"
+
+[project.optional-dependencies]
+test = ["pytest>=8", "PyYAML>=6", "build"]
+
+[project.entry-points."hermes_agent.plugins"]
+kiokuko-tools = "hermes_kiokuko.plugin_entry"
+
+[project.entry-points."hermes_agent.memory_providers"]
+kiokuko = "hermes_kiokuko.provider_entry:register"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hermes_kiokuko = ["migrations/*.sql", "plugin.yaml", "skills/**/*.md"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["hermes: tests against the audited Hermes source checkout"]
