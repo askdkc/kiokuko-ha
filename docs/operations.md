@@ -89,3 +89,7 @@ backupはSQLite backup APIでDBとprofile keyを一組にし、manifestとdigest
 process内の重複開始を防ぎ、venv直下の`.kiokuko-update.lock`で別processの同コマンドとも排他します。手動pipや他の更新ツールとの排他は保証しません。インストールは最大180秒、インストール済みversion確認は最大15秒です。処理中に通常終了するとworkerの終了を待つため、statusで完了を確認してから終了してください。強制終了・失敗・timeout時の自動rollbackはなく、部分的な更新の可能性を表示します。`retry`は失敗後だけ再実行し、成功後は再起動を案内します。生のpip出力は会話やDBへ保存しません。詳細調査は同じPythonで端末からpipを実行します。
 
 新規sessionはGatewayプロセス内で作られ、読み込んだPython moduleやplugin登録が残ります。Telegram・Discordでも新しい会話だけでは更新が反映されないため、その接続を担当するGatewayプロセスを再起動してください。OSの再起動は不要です。チャット経由の更新権限を確認できないため、このコマンド自体はGatewayからの実行を拒否します。
+
+## 任意のOrca監視
+
+監視を有効にすると、追加のNode補助プロセスと経験抽出jobが動作します。経験は人間が承認した記憶とは別の未検証区分です。本人・会話・workspaceの境界、元traceと記憶の削除範囲、監視障害時の動作は[API監視と経験記憶](monitoring.ja.md)を参照してください。backupにはtrace本文を含めません。

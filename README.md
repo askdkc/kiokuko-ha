@@ -101,3 +101,7 @@ kioku-curation
 ```
 
 See [curation details](docs/curation.md), [operational boundaries](docs/operations.md), and [verification](docs/verification.md).
+
+## Optional API monitoring and experience memory
+
+With Node.js 22.12+, `hermes kiokuko monitor enable` records normal OpenAI-compatible CLI/Gateway requests and responses through OrcaReplay. Every completed turn schedules an additional model extraction call; useful experiences can be recalled automatically as **unverified historical examples**, separately from approved memory. Monitoring is initially disabled; traces are retained for at most seven days / 1 GiB per profile. See [setup, model routing, boundaries and deletion](docs/monitoring.md).

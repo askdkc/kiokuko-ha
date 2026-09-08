@@ -19,6 +19,8 @@ def pre_llm_call(*, session_id: str, turn_id: str, user_message, task_id="",
         snapshot = service.snapshot(session_id, turn_id, user_message, identity, task_id=task_id,
                                     parent_session_id=parent_session_id, deadline=deadline,
                                     workspace_root=resolve_agent_cwd())
+        from .monitor_capture import begin_turn
+        begin_turn(service, snapshot, user_message)
         receipt = None
         if service.config["explicit_commands"]["enabled"]:
             try:

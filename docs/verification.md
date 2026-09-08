@@ -1,15 +1,15 @@
 # 検証記録
 
-2026-09-05時点。MVPのコードと固定Hermesによる統合試験を実装済みです。release用の全環境matrixは未完了です。
+2026-09-08時点。Orca監視・経験記憶を含むコードと固定Hermesによる統合試験を実装済みです。release用の全環境matrixは未完了です。
 
 ## 実行環境と結果
 
 | 環境 | 対象 | 結果 |
 |---|---|---|
-| macOS arm64 / Python 3.12.13 | unit・SQLite integration・Hermes integration（v0.1.1） | 107 passed |
-| macOS arm64 / Python 3.11.15 | unit・SQLite integration | 69 passed |
-| macOS arm64 / Python 3.13.14 | unit・SQLite integration | 69 passed |
-| distribution | sdistからwheel作成、SQL・plugin metadata・二つのentry point | 検証済み |
+| macOS arm64 / Python 3.12.13 | unit・SQLite integration・固定Hermes integration | 145 passed |
+| macOS arm64 / Python 3.11.15 | unit・SQLite integration | 110 passed |
+| macOS arm64 / Python 3.13.14 | unit・SQLite integration | 110 passed |
+| distribution | sdistからwheel作成、SQL・plugin metadata・二つのentry point・Orca bundleとreader | 検証済み |
 
 Hermesは`NousResearch/hermes-agent@13e72fb205b735df679e0fd5f5996a34ac4accc6`（0.21.0）に固定しています。[pin.json](../tests/hermes_e2e/pin.json)にarchiveと契約対象ソースのSHA-256を記録し、host fixtureはimport先の対象ファイルを照合します。別の0.21.xを同じ結果と見なしません。
 
@@ -26,7 +26,11 @@ Hermesは`NousResearch/hermes-agent@13e72fb205b735df679e0fd5f5996a34ac4accc6`（
 - **slash update（v0.1.1）**：固定Hermesへの登録、現在profileとPythonの固定、重複開始・venv lockによる競合拒否、失敗後のretry、Gateway拒否を試験。一時venvの模擬pipを実subprocessで起動し、引数・`HERMES_HOME`・pip設定の隔離・version確認を検証。異常終了・timeout・起動失敗を成功扱いせずlockを解放することを確認。PyPIからの実インストールや既存Hermes環境の更新はこの検証では実行していません。
 - **追加migration**：v1の記憶とkeyを保持してv2へ移行し、v1 checksum不一致では移行しないことを検証。
 
-会話ループのLLM HTTP通信と、compaction用の追加モデル呼び出しを決定的な応答へ置換しています。実モデルの抽出精度・網羅性・訂正への追従は測定していません。Gatewayの実ネットワーク接続、Telegram等の配送、Linux、Python 3.11/3.13上の全Hermes依存環境、performance目標は未検証です。テストは一時profileを使い、既存ユーザーprofileを変更しません。
+- **Orca監視**：CLIとGatewayの実AIAgent→実OpenAI SDK→localhost HTTP→実Node writer→同梱Python readerを通過。通常応答・SSEからの集約応答・実tool loopを記録。固定抽出結果を保存し、次ターンの実HTTP要求へ未検証ラベル付きで注入。A/B・groupの同時middleware、429/500/timeout/キャンセル、監視ON/OFFでの要求・応答・実行回数の維持、補助モデルの実HTTP呼び出しとfallback禁止を検証。
+- **経験・障害境界**：v1/v2→v3、引用不一致、成功宣言だけの結果未確認化、secret・恒久指示・assistantだけの根拠の拒否、scope、独立観測と再検索の区別、期限・訂正・purge・rewind後の既存経験と遅延jobの失効を検証。Node起動失敗、queue/容量超過、未完了run・jobの復旧、抽出timeout後のlock保持、取得ゼロ、完了と最終応答の競合、events/blob破損・未知イベント・symlink・保持期限・元記録欠落も試験。
+- **Orca配布物**：`40ed17c8b865952e6f0b31bf1df9876a9645814e`へ固定。bundle再生成後のdigest、上流ソース・同梱Python readerのchecksum一致を確認。実行時npmは不要。
+
+LLMは決定的な応答です。監視試験ではlocalhostのHTTPサーバー、既存の会話試験ではHTTP transportの置換を使います。実モデルの抽出精度・網羅性・訂正への追従は測定していません。Gatewayの実ネットワーク接続、Telegram等の配送、Linux、Python 3.11/3.13上の全Hermes依存環境、performance目標は未検証です。テストは一時profileを使い、既存ユーザーprofileを変更しません。
 
 `codex_app_server`・MoAは自動注入の対象外です。background review/delegation captureとsemantic retrieval/embedding consumerはoptional phaseであり、未提供です。vector試験はconsumerの完成を示すものではなく、purge後の遅延commitを拒否する境界の試験です。supersedeはDDLの削除規則を試験していますが、merge/supersede用CLIは公開していません。
 
@@ -56,4 +60,4 @@ host未install時はHermes suiteがskipされます。**coreのみの合格やsk
 .venv/bin/python -m build
 ```
 
-wheelにはruntime package、SQL、plugin manifest、entry pointだけを含めます。Hermes本体、DB、identity key、native memory、開発用cacheは含めません。package自体にHermesの重複依存を宣言せず、hostの既存環境と起動時の互換性検査を使います。
+wheelにはruntime package、SQL、plugin manifest、entry point、ビルド済みOrca bundle、固定Python reader、第三者licenseを含めます。Hermes本体、Node実行環境、DB、identity key、native memory、開発用cacheは含めません。package自体にHermesの重複依存を宣言せず、hostの既存環境と起動時の互換性検査を使います。

@@ -24,6 +24,12 @@ def acquire(home):
         token = new_id("owner")
         with _lock:
             _owners[token] = service
+        if service.config["monitor"]["enabled"]:
+            try:
+                from .monitor import get_manager
+                get_manager(service)
+            except Exception:
+                record_status("MONITOR_START_FAILED", service)
         return token, service
     except BaseException:
         store.close()
@@ -34,6 +40,11 @@ def release(token):
     with _lock:
         service = _owners.pop(token, None)
     if service:
+        with _lock:
+            remaining = any(s.store.home == service.store.home for s in _owners.values())
+        if not remaining:
+            from .monitor import release_home
+            release_home(service.store.home)
         service.store.close()
 
 

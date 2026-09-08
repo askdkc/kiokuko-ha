@@ -141,6 +141,8 @@ class Service:
             if rewound:
                 db.execute("UPDATE session_bindings SET generation=generation+1,updated_at=? WHERE session_id=?", (now(), session_id))
                 db.execute("UPDATE memory_candidates SET state='invalidated_by_rewind',resolved_at=? WHERE session_id=? AND state='pending'", (now(), session_id))
+                from .experiences import invalidate_generation
+                invalidate_generation(self, db, session_id)
 
     def _entry(self, db, entry_id, snapshot=None, *, admin=False):
         row = db.execute("SELECT * FROM memory_entries WHERE id=?", (entry_id,)).fetchone()
@@ -158,7 +160,8 @@ class Service:
                     if can_read(historical, snapshot):
                         revisions.append(dict(row))
                 return revisions
-            return entry
+            from .experiences import details
+            return details(db, entry)
 
     def _revision(self, db, entry, operation, actor):
         insert(db, "memory_revisions", {"entry_id": entry["id"], "revision": entry["current_revision"],
@@ -207,7 +210,7 @@ class Service:
         db.execute("INSERT OR IGNORE INTO session_invalidations(session_id,entry_id) SELECT DISTINCT d.session_id,? FROM retrieval_deliveries d JOIN retrieval_delivery_entries e ON e.delivery_id=d.id WHERE e.entry_id=? AND e.entry_revision<=?",
                    (entry_id, entry_id, revision))
 
-    def _change(self, db, entry, action, *, body=None, approved=False, scope=None, workspace=None):
+    def _change(self, db, entry, action, *, body=None, approved=False, scope=None, workspace=None, actor=None):
         previous = entry["current_revision"]
         entry = dict(entry)
         entry.update(current_revision=previous + 1, updated_at=now())
@@ -215,7 +218,7 @@ class Service:
         if action == "correct":
             entry.update(claim=body, normalized_claim=body, content_sha256=digest(body), state="active", auto_inject=1,
                          epistemic_status="user_approved" if approved else "user_correction",
-                         confirmation_kind="cli_approved" if approved else "direct_verbatim", authority=100, confidence=1.0)
+                         confirmation_kind="cli_approved" if approved else "direct_verbatim", authority=100, confidence=1.0, valid_until=None)
         elif action in {"forget", "forget_request", "expire_request"}:
             state = "expired" if action == "expire_request" else "revoked"
             entry.update(state=state, auto_inject=0)
@@ -233,12 +236,16 @@ class Service:
             raise KiokukoError("INVALID_ACTION")
         db.execute("UPDATE memory_entries SET " + ','.join(f"{key}=?" for key in entry if key != "id") + " WHERE id=?",
                    (*[v for k, v in entry.items() if k != "id"], entry["id"]))
-        self._revision(db, entry, operation, "human-cli" if approved else "explicit-user")
+        self._revision(db, entry, operation, actor or ("human-cli" if approved else "explicit-user"))
         if action in {"share", "pin_request", "unpin_request"}:
+            db.execute("INSERT INTO experiences SELECT entry_id,?,structure_json FROM experiences WHERE entry_id=? AND entry_revision=?",
+                       (entry["current_revision"], entry["id"], previous))
             db.execute("""INSERT INTO verified_facts
                 SELECT entry_id,?,profile_key,session_id,turn_id,predicate_json,source_sha256,verified_at
                 FROM verified_facts WHERE entry_id=? AND entry_revision=?""",
                        (entry["current_revision"], entry["id"], previous))
+        if entry["kind"] == "experience" and action in {"correct", "forget", "forget_request", "expire_request", "conflict"}:
+            db.execute("UPDATE experience_jobs SET state='blocked',error_code='EXPERIENCE_INVALIDATED' WHERE run_id IN (SELECT run_id FROM experience_sources WHERE entry_id=?)", (entry["id"],))
         self._invalidate(db, entry["id"], previous, change)
         return entry
 

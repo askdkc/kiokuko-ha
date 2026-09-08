@@ -29,7 +29,7 @@ kiokuko = "hermes_kiokuko.provider_entry:register"
 where = ["src"]
 
 [tool.setuptools.package-data]
-hermes_kiokuko = ["migrations/*.sql", "plugin.yaml", "skills/**/*.md"]
+hermes_kiokuko = ["migrations/*.sql", "plugin.yaml", "skills/**/*.md", "orca/*", "_vendor/orca_trace/py.typed"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

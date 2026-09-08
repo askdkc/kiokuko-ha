@@ -19,6 +19,10 @@
     "cli.py": "1acf08b2002d1e9bba58360986d53a7f1f7d6724a79b6dbe09c77fc74a160151",
     "hermes_cli/cli_tui_mixin.py": "69b4d5265871450f5b13edac5c55fbe9498c79d00d65a2724861b451d307b35a",
     "gateway/run_inbound.py": "8b983ea50a991d5ec8512062f8baea73a3e4a9aec8a6093fe7b19004f0f7d45c",
-    "agent/runtime_cwd.py": "4b72f7680b76f965325dd3555bbfc5ef328d99f312d19c057ec9cd1cc15ab71e"
+    "agent/runtime_cwd.py": "4b72f7680b76f965325dd3555bbfc5ef328d99f312d19c057ec9cd1cc15ab71e",
+    "agent/turn_api_call.py": "5dead01b498131df2ee987e431ded73ca21313ef1a52633e9aa802efc2aa00b5",
+    "agent/turn_api_request.py": "7d5819b254019d07d13081df4bb3ff97ba9207342d11b09dd403696344acedac",
+    "agent/turn_response_intake.py": "d7db0a4a5151047a01da17f8b7b7385f70839a8633645a01118685f0466838ee",
+    "agent/chat_completion_helpers.py": "57e15e7c3033fc5daf655392e59dd1c18889bedf1526c85a64b54468ddc3a827"
   }
 }

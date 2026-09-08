@@ -20,6 +20,8 @@ def setup_parser(parser):
     sub = parser.add_subparsers(dest="kiokuko_action", required=True)
     for command in ("setup", "status", "doctor", "config", "verify", "reindex", "pending", "conflicts", "export", "principals", "workspaces", "curation"):
         sub.add_parser(command)
+    from .monitor_cli import setup_parser as monitor_parser
+    monitor_parser(sub.add_parser("monitor"))
     search = sub.add_parser("search")
     search.add_argument("query")
     for command in ("show", "history", "approve", "reject", "purge", "purge-candidate"):
@@ -81,11 +83,20 @@ def execute(args, home, *, input_fn=input, output=print):
     store = Store(home, initialize=action in {"remember", "import-native-user-profile"})
     try:
         service = Service(store, host_guard=check_host, content_guard=host_scan)
+        if action == "monitor":
+            from .monitor_cli import execute as execute_monitor
+            return execute_monitor(service, args)
         if action in {"doctor", "verify"}:
-            return verify(service)
+            result = verify(service)
+            if action == "doctor":
+                from .monitor import status as monitor_status
+                result["monitor"] = monitor_status(service)
+            return result
         if action == "config":
             return load_config(home)
         if action == "status":
+            from .monitor import status as monitor_status
+            monitor_info = monitor_status(service)
             with service.transaction() as db:
                 return {"deliveries": dict(db.execute("SELECT state,count(*) FROM retrieval_deliveries GROUP BY state")),
                         "candidates": dict(db.execute("SELECT state,count(*) FROM memory_candidates GROUP BY state")),
@@ -93,7 +104,8 @@ def execute(args, home, *, input_fn=input, output=print):
                         "recent_operations": [dict(row) for row in db.execute("SELECT operation,state,entry_id,entry_revision,created_at FROM explicit_operation_receipts ORDER BY created_at DESC LIMIT 20")],
                         "sync_skips_and_errors": [dict(row) for row in db.execute("SELECT * FROM status_events ORDER BY updated_at DESC")],
                         "verified_compaction": dict(db.execute("SELECT COALESCE(sum(accepted_count),0) AS accepted,COALESCE(sum(rejected_count),0) AS rejected FROM compaction_receipts").fetchone()),
-                        "schema": SCHEMA_VERSION}
+                        "schema": SCHEMA_VERSION,
+                        "monitor": monitor_info}
         if action == "curation":
             from .curation import curate
             return curate(service, cli_snapshot(service, "curation"), input_fn=input_fn, output=output)
@@ -111,8 +123,9 @@ def execute(args, home, *, input_fn=input, output=print):
             if action in {"show", "history"}:
                 # Human administrator may inspect entries to review and purge any owner.
                 with service.transaction() as db:
+                    from .experiences import details
                     entry = service._entry(db, args.id, admin=True)
-                    return [dict(row) for row in db.execute("SELECT * FROM memory_revisions WHERE entry_id=? ORDER BY revision", (args.id,))] if action == "history" else entry
+                    return [dict(row) for row in db.execute("SELECT * FROM memory_revisions WHERE entry_id=? ORDER BY revision", (args.id,))] if action == "history" else details(db, entry)
             return service.search(snap, getattr(args, "query", ""), conflicts=action == "conflicts")
         if action == "pending":
             with service.transaction() as db:

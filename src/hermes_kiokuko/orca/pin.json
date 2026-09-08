@@ -1,0 +1,30 @@
+{
+  "repository": "Continuum-AI-Corp/OrcaReplay",
+  "commit": "40ed17c8b865952e6f0b31bf1df9876a9645814e",
+  "archive_sha256": "57386100c8c2140e67211f3ccad21a3f6816752ef697ae93fdf3607e7795f7e3",
+  "files": {
+    "packages/core/src/blobs.ts": "0cefbe9e4b00f819f65467eaef322cf3afc74f558ec60cec3938bf04da667e7f",
+    "packages/core/src/writer.ts": "c2dd060bc1bbddac1a3275c3604013d1ad7bdb12b029834b7b6d0c9e3a985d92",
+    "packages/core/src/reader.ts": "d3ee11fff41ed7cf4de432cce0db98108d88719395c5e07e7c0ecd56c908aa15",
+    "packages/core/src/graph.ts": "6803034050fa95ccba1f3b0e941ca7983f8cf46e351151250d487eac43737b11",
+    "packages/core/src/index.ts": "e7bf024c0acdafae50f0eb3aebaedba088031b4277bf94c3b10fa8c53ec76654",
+    "packages/core/src/paths.ts": "a4333d3585fbba4aaaa8f80ac546b0015d5db1ec4dc7f94c316b28d9dd17eaa2",
+    "packages/core/src/redaction.ts": "2fad7a51afb1394c6eb141cec366856e7228c21eb43e7d7b8bb1dc4e33f5c941",
+    "packages/schema/src/validate.ts": "34d45e0d77d129285f6828afd089c8787004be364e591b7f0f1a5194c672a6ef",
+    "packages/schema/src/types.ts": "47ab43f0ef94b52425fb30a9a87df62b78805e2e2ad5d6c385a0f1f6dee0e3c0",
+    "packages/schema/src/constants.ts": "4b939150c256e7db47b24e15838564f14c480ff1616680b0c32bb3e9d47ca118",
+    "packages/schema/src/index.ts": "323615740abf55f7f424b8284ecd90c077f47d33f490f2ad148a9b2375e10523",
+    "packages/schema/schema/event.schema.json": "2e65dd80552d863598f69d52052f45483b8c3ecfb2265f1094466e218aebad2e",
+    "packages/schema/schema/manifest.schema.json": "3648ec104747b0c498bb43c2fba9197754215746a84c4bff76e0df0539b9a704",
+    "packages/plugin-api/src/canonical.ts": "51a6a4609778c147b9bcb0bd18c374215c51fd3a2df8bdf97b847ac757a800d0",
+    "packages/plugin-api/src/index.ts": "1173e4746b639df9a33f39ec678f4866e586138330942fe6fa47b5de51e98de3",
+    "packages/plugin-api/src/plugins.ts": "bafd3ee520cd6a56302074c16515643d63c64d1c53a71295dd20568d72f79b70",
+    "python/orca_trace/models.py": "35635ed5fcededf586136f237b53dbb478e10452c3413d84e4565bf31fbe1bd2",
+    "python/orca_trace/graph.py": "8ce8c68fa251bcc04bc20a1070f1a1b58c38c9ea7289a6169e7705e9b3d77ba7",
+    "python/orca_trace/__init__.py": "f36cb8d604faacbab66e116a71787a5aedc6d631da88b4aba32c06ef12becd42",
+    "python/orca_trace/reader.py": "48aa2d1a9a6b9d786e783aa011dace7314b7a91e2d45d7ef5ae5dfb393e1883c",
+    "python/orca_trace/py.typed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "package-lock.json": "5b77029ee7838c4db14a3a659cf302f2ecddab39ff67f0e5ebbf3673383a733f"
+  },
+  "bundle_sha256": "5719c9e47c7d76381c76bb1015efeb3f5e62919deedc6bed213a8d5e01c3b513"
+}

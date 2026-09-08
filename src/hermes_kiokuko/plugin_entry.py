@@ -15,6 +15,9 @@ def register(ctx):
                           check_fn=surface_is_compatible_and_selected,
                           description="Kiokuko scoped memory; model proposals require human approval")
     ctx.register_hook("pre_llm_call", pre_llm_call)
+    from .monitor_capture import llm_execution_middleware, capture_tool_middleware
+    ctx.register_middleware("llm_execution", llm_execution_middleware)
+    ctx.register_middleware("tool_execution", capture_tool_middleware)
     ctx.register_middleware("tool_execution", tool_execution_middleware)
     ctx.register_cli_command("kiokuko", "Kiokuko memory management", setup_parser, cli_handler)
     from .curation import setup_parser as curation_parser

@@ -6,6 +6,7 @@ from .filesystem import atomic_write, file_lock, private_directory
 
 DEFAULTS = {
     "schema_version": 1,
+    "monitor": {"enabled": False},
     "verified_compaction": {"enabled": True},
     "write_policy": "explicit_verbatim_or_human_approval_or_file_verification",
     "context_injection": {"enabled": True, "source": "pre_llm_call", "max_entries": 8,
@@ -71,7 +72,7 @@ def load_config(home: Path) -> dict:
             cfg[key].update(value)
         else:
             cfg[key] = value
-    adjustable = {("context_injection", "enabled"), ("context_injection", "max_entries"),
+    adjustable = {("monitor", "enabled"), ("context_injection", "enabled"), ("context_injection", "max_entries"),
                   ("verified_compaction", "enabled"),
                   ("context_injection", "max_chars"), ("context_injection", "min_authority"),
                   ("context_injection", "min_confidence"), ("explicit_commands", "enabled"),

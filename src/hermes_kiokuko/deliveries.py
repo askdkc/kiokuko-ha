@@ -118,6 +118,7 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
         if service.config["context_injection"]["enabled"]:
             entries += search(db, snapshot, query, service.config)
         selected, emitted = [], set()
+        experience_count, experience_chars = 0, 0
         for entry in entries:
             key = (entry["id"], entry["current_revision"])
             if key in emitted or (key in seen_entries and entry["id"] not in {i["entry_id"] for i in invalidations} and not fence):
@@ -126,9 +127,17 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
                 service.validate_content(entry["claim"])
             except KiokukoError:
                 continue
+            is_experience = entry["epistemic_status"] == "observed_experience"
             text = f"[{entry['id']}@{entry['current_revision']}][{entry['scope_type']}][{entry['epistemic_status']}]\n{entry['claim']}"
+            if is_experience:
+                text = "未検証の過去事例（要約と推論は未確認）\n" + text
+                if experience_count >= 2 or experience_chars + len(text) > 800:
+                    continue
             if len('\n\n'.join(parts + [text])) + reserve > budget or len(selected) >= service.config["context_injection"]["max_entries"]:
                 continue
+            if is_experience:
+                experience_count += 1
+                experience_chars += len(text)
             parts.append(text)
             emitted.add(key)
             selected.append(entry)
@@ -198,7 +207,7 @@ def sync_completed(service, session_id, user_content, messages):
         observe(db, verified)
         existing = db.execute("SELECT 1 FROM turn_syncs WHERE profile_key=? AND session_id=? AND turn_id=?", snap.key).fetchone()
         if existing:
-            return
+            return snap
         # Quotes are checked only against the actual raw user row. This never promotes.
         for evidence in db.execute("SELECT e.id,e.excerpt FROM memory_evidence e JOIN memory_candidates c ON e.candidate_id=c.id WHERE c.profile_key=? AND c.session_id=? AND c.turn_id=? AND e.source_kind='proposed_quote'", snap.key).fetchall():
             db.execute("UPDATE memory_evidence SET quote_verified=? WHERE id=?", (int(bool(evidence["excerpt"]) and evidence["excerpt"] in raw), evidence["id"]))
@@ -213,3 +222,4 @@ def sync_completed(service, session_id, user_content, messages):
             db.execute("UPDATE memory_evidence SET quote_verified=1 WHERE candidate_id=?", (candidate["id"],))
         insert(db, "turn_syncs", {"profile_key": snap.profile_key, "session_id": snap.session_id,
                "turn_id": snap.turn_id, "completed_at": now()})
+    return snap
