@@ -41,6 +41,12 @@ def eligible(entry, snapshot, config, db=None):
     cfg = config["context_injection"]
     if not can_read(entry, snapshot) or entry["state"] != "active":
         return False
+    if entry["epistemic_status"] == "observed_experience":
+        return bool(db is not None and config["monitor"]["enabled"] and entry["kind"] == "experience"
+            and entry["confirmation_kind"] is None and entry["valid_until"] and entry["valid_until"] > now()
+            and not entry["shared_by_admin"] and db.execute(
+                "SELECT 1 FROM experiences WHERE entry_id=? AND entry_revision=?",
+                (entry["id"], entry["current_revision"])).fetchone())
     from .facts import fact_current
     verified = fact_current(db, entry) if db is not None else None
     if verified is False or (entry["epistemic_status"] == "file_verified" and verified is not True):
@@ -68,14 +74,15 @@ def search(db, snapshot, query, config, *, conflicts=False):
         prefix = "WITH hits AS (" + hit_sql + ") "
         score = "COALESCE((SELECT sum(score) FROM hits WHERE hits.entry_id=memory_entries.id),0)"
         predicate = " AND (pinned=1 OR id IN (SELECT entry_id FROM hits))"
-    rows = db.execute(prefix + f"SELECT *,{score} AS lexical_score FROM memory_entries WHERE {scope} AND state='active' AND (auto_inject=1 OR epistemic_status='file_verified')" + predicate +
-                      " ORDER BY pinned DESC,lexical_score DESC,authority DESC,id LIMIT ?", (*params, *values, config["retrieval"]["candidate_limit"])).fetchall()
-    candidates = [dict(row) for row in rows if eligible(row, snapshot, config, db)]
+    rows = db.execute(prefix + f"SELECT *,{score} AS lexical_score FROM memory_entries WHERE {scope} AND state='active' AND (auto_inject=1 OR epistemic_status IN ('file_verified','observed_experience'))" + predicate +
+                      " ORDER BY (epistemic_status='observed_experience'),pinned DESC,lexical_score DESC,authority DESC,id LIMIT ?", (*params, *values, config["retrieval"]["candidate_limit"])).fetchall()
+    candidates = [dict(row) for row in rows if eligible(row, snapshot, config, db)
+                  and (row["epistemic_status"] != "observed_experience" or (query_tokens and row["lexical_score"] > 0))]
     query_set = set(query_tokens)
     def rank(entry):
         relevance = entry["lexical_score"]
         specificity = 5 if "workspace" in entry["scope_type"] else 0
         verified_bonus = 10 if entry["epistemic_status"] == "file_verified" and entry["workspace_id"] == snapshot.workspace_id else 0
-        return (-entry["pinned"], -(relevance + specificity + verified_bonus + entry["authority"] / 10), entry["id"])
+        return (entry["epistemic_status"] == "observed_experience", -entry["pinned"], -(relevance + specificity + verified_bonus + entry["authority"] / 10), entry["id"])
     candidates.sort(key=rank)
     return candidates

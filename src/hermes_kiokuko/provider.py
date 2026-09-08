@@ -41,7 +41,13 @@ class KiokukoMemoryProvider(MemoryProvider):
         try:
             if self._service is None:
                 raise KiokukoError("PROVIDER_NOT_READY")
-            sync_completed(self._service, session_id, user_content, messages)
+            snap = sync_completed(self._service, session_id, user_content, messages)
+            if snap is not None:
+                from .monitor import complete_turn
+                try:
+                    complete_turn(self._service, snap)
+                except Exception:
+                    runtime.record_status("MONITOR_COMPLETION_FAILED", self._service)
             if any(isinstance(m, dict) and m.get("_compressed_summary") for m in messages or []):
                 from .compaction import run_capture
                 run_capture(self._service, messages, "post_compress")
@@ -56,6 +62,8 @@ class KiokukoMemoryProvider(MemoryProvider):
                 runtime.record_status(error.code, self._service)
 
     def on_session_end(self, messages):
+        from .monitor import end_session
+        end_session(self._service, messages)
         from .compaction import run_capture
         run_capture(self._service, messages, "session_end")
 

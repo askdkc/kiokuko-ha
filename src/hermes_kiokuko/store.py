@@ -18,8 +18,11 @@ FTS = files("hermes_kiokuko").joinpath("migrations/fts.sql").read_text()
 INITIAL_CHECKSUM = hashlib.sha256((SCHEMA + FTS).encode()).hexdigest()
 FACT_SCHEMA = files("hermes_kiokuko").joinpath("migrations/002_verified_facts.sql").read_text()
 FACT_CHECKSUM = hashlib.sha256(FACT_SCHEMA.encode()).hexdigest()
-CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA).encode()).hexdigest()
-SCHEMA_VERSION = 2
+V2_CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA).encode()).hexdigest()
+MONITOR_SCHEMA = files("hermes_kiokuko").joinpath("migrations/003_monitor.sql").read_text()
+MONITOR_CHECKSUM = hashlib.sha256(MONITOR_SCHEMA.encode()).hexdigest()
+CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA).encode()).hexdigest()
+SCHEMA_VERSION = 3
 
 
 def execute_statements(db, script):
@@ -130,6 +133,12 @@ class Store:
                 db.execute("INSERT INTO schema_migrations VALUES (2,?,?)", (FACT_CHECKSUM, now()))
                 db.execute("PRAGMA user_version=2")
                 db.execute("UPDATE store_metadata SET value=? WHERE key='schema_hash'", (schema_digest(db),))
+            if db.execute("PRAGMA user_version").fetchone()[0] == 2:
+                self.guard(db, version=2)
+                execute_statements(db, MONITOR_SCHEMA)
+                db.execute("INSERT INTO schema_migrations VALUES (3,?,?)", (MONITOR_CHECKSUM, now()))
+                db.execute("PRAGMA user_version=3")
+                db.execute("UPDATE store_metadata SET value=? WHERE key='schema_hash'", (schema_digest(db),))
             self.guard(db)
             db.commit()
         except sqlite3.Error:
@@ -142,7 +151,8 @@ class Store:
             os.close(self.holder)
             self.holder = None
 
-    def guard(self, db, *, legacy=False):
+    def guard(self, db, *, legacy=False, version=None):
+        version = version or (1 if legacy else SCHEMA_VERSION)
         if self.holder is None:
             raise KiokukoError("STORE_CLOSED")
         checked_file(self.path)
@@ -150,10 +160,10 @@ class Store:
         if self.path.stat().st_ino != self.inode or self.key_path.read_bytes() != self.key:
             raise KiokukoError("STORE_IDENTITY_CHANGED")
         if db.execute("PRAGMA application_id").fetchone()[0] != 0x4B484D45 or \
-                db.execute("PRAGMA user_version").fetchone()[0] != (1 if legacy else SCHEMA_VERSION):
+                db.execute("PRAGMA user_version").fetchone()[0] != version:
             raise KiokukoError("SCHEMA_MISMATCH")
         rows = db.execute("SELECT version,checksum FROM schema_migrations").fetchall()
-        expected = [(1, INITIAL_CHECKSUM)] + ([] if legacy else [(2, FACT_CHECKSUM)])
+        expected = [(1, INITIAL_CHECKSUM)] + ([(2, FACT_CHECKSUM)] if version >= 2 else []) + ([(3, MONITOR_CHECKSUM)] if version >= 3 else [])
         if sorted(tuple(row) for row in rows) != expected:
             raise KiokukoError("CHECKSUM_MISMATCH")
         meta = dict(db.execute("SELECT key,value FROM store_metadata").fetchall())

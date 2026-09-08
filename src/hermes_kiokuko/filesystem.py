@@ -22,14 +22,18 @@ def private_directory(path: Path) -> None:
 
 
 def checked_file(path: Path) -> None:
-    if path.is_symlink():
+    # SQLite may unlink WAL/SHM between transactions. Inspect one metadata snapshot,
+    # without following symlinks or racing exists() against stat().
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(info.st_mode):
         raise KiokukoError("UNSAFE_PATH")
-    if path.exists():
-        info = path.stat()
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
-            raise KiokukoError("UNSAFE_OWNER")
-        if stat.S_IMODE(info.st_mode) & 0o077:
-            raise KiokukoError("UNSAFE_PERMISSIONS")
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+        raise KiokukoError("UNSAFE_OWNER")
+    if stat.S_IMODE(info.st_mode) & 0o077:
+        raise KiokukoError("UNSAFE_PERMISSIONS")
 
 
 def local_filesystem(path: Path) -> None:
