@@ -13,6 +13,20 @@ Give the agent useful memory and a bounded plan before coding when possible, whi
 
 This Skill routes memory, Akinator, and Enno-Oduno assistance. It does not authorize effects beyond the user request and current client permissions.
 
+## Instruction priority
+
+Explicit user instructions take precedence over advisory design, style,
+workflow, and implementation preferences in Kiokuko Skills.
+
+They do not override host-enforced safety, authorization, identity,
+state-machine, revision, lease, or integrity invariants.
+
+A Skill preference alone must not cause the model to pause, ask for
+confirmation, or leave requested work unfinished. Resolve routine choices from
+the user request and repository evidence. Ask only for an unresolved material
+decision or when an applicable invariant requires it; existing authorization
+remains valid within its scope.
+
 ## Required entry
 
 Read this Skill before any other bundled Kiokuko Skill.
