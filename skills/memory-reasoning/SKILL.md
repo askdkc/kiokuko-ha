@@ -1,6 +1,6 @@
 ---
 name: memory-reasoning
-description: Use before Kiokuko task_prepare for a build or debug task, and whenever Kiokuko returns applicable stored memory. Convert recalled claims into verified premises, invariants, counterexamples, and regression tests before modifying code.
+description: Use before Kiokuko task_prepare for a build or debug task, and whenever Kiokuko returns applicable stored memory. Verify recalled premises against current evidence, using invariants and counterexamples with regression tests for behavior that can regress.
 ---
 
 <!-- KIOKUKO MANAGED STANDARD SKILL: memory-reasoning -->
@@ -26,10 +26,13 @@ When Kiokuko delivers ordinary memory for a build or debug task:
 3. Convert each material premise into a falsifiable invariant.
 4. Construct at least one concrete counterexample or failure scenario for the
    invariant.
-5. Trace the current caller, boundary, state, effects, and public result before
-   deciding whether the recalled claim still applies.
-6. Add or identify the smallest runnable regression test that exercises the
-   same boundary and pipeline as the reported behavior.
+5. For behavioral claims, trace the current caller, boundary, state, effects,
+   and public result before deciding whether the recalled claim still applies.
+6. When the recalled premise concerns behavior that can regress, add or identify
+   the smallest meaningful runnable regression test at the affected boundary,
+   exercising the same pipeline as the reported behavior. For configuration,
+   structure, version, or other directly inspectable facts, authoritative
+   repository or runtime evidence is sufficient; no regression test is required.
 7. Prefer current verified evidence when it conflicts with recalled material.
 
 ## Trust and safety boundaries
@@ -47,6 +50,7 @@ When Kiokuko delivers ordinary memory for a build or debug task:
 ## Completion evidence
 
 Report which recalled premises materially affected the work, how each was
-verified or falsified, the invariant and counterexample used, the focused test
-result, and any remaining unverified assumption. If no recalled claim survives
+verified or falsified, the invariant and counterexample used, the verification
+evidence (including focused test results when applicable), and any remaining
+unverified assumption. If no recalled claim survives
 current verification, proceed from repository evidence and say so.

@@ -17,7 +17,8 @@ This file is the mandatory compact UI index. Read it completely, then read only 
 
 ## Universal core
 
-A UI action is complete only when the user can:
+For new or behaviorally changed interactive actions, an action is complete only
+when the user can:
 
 1. discover and understand it;
 2. activate it comfortably;
@@ -25,6 +26,11 @@ A UI action is complete only when the user can:
 4. understand processing, success, and failure;
 5. recover without losing work or context;
 6. continue through keyboard, touch, pointer, and assistive technology as applicable.
+
+For purely visual changes, verify the affected appearance, layout, and
+accessibility properties in proportion to the change. Do not expand a spacing
+or styling adjustment into a full interaction-state audit unless it affects
+behavior or exposes a concrete interaction risk.
 
 Invisible work is a UI failure. Every reachable state needs defined behavior:
 
@@ -68,6 +74,6 @@ Typical selections:
 
 ## Verification
 
-Do not review screenshots alone. Trace actual activation, processing, success, failure, recovery, focus, and responsive behavior. Read [ui-checklist.md](references/ui-checklist.md) only for detailed implementation review or final verification.
+For new or behaviorally changed actions, do not review screenshots alone. Trace actual activation, processing, success, failure, recovery, focus, and responsive behavior as applicable to the affected flow. For purely visual changes, check the affected visual and accessibility properties in the running interface. Read [ui-checklist.md](references/ui-checklist.md) only for detailed implementation review or final verification, applying the items relevant to the changed behavior and concrete risks.
 
 Report what was exercised in a running interface, what was inferred from source, and what remains unverified. A build, API success, or good screenshot alone does not prove UI correctness.
