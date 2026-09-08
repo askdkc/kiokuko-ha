@@ -104,4 +104,11 @@ kioku-curation
 
 ## 任意のAPI監視・経験記憶
 
-Node.js 22.12以降を用意し、`hermes kiokuko monitor enable`で通常のOpenAI互換CLI・Gateway通信をOrcaReplayへ記録できます。全完了ターンで追加AI抽出を行い、有用な経験を**未検証の過去事例**として自動検索します。既存の承認済み記憶とは区別します。監視は初期状態で無効、traceは最大7日・profileあたり1 GiBです。[設定・モデル経路・記憶の境界・削除](docs/monitoring.ja.md)を確認してください。
+HermesのCLI・GatewayからOpenAI互換APIへの要求・応答をOrcaReplayへ記録できます。Node.js 22.12以降を用意し、対象のHermes profileを指定したローカル端末で監視を有効化・状態確認します。
+
+```sh
+hermes kiokuko monitor enable
+hermes kiokuko monitor status
+```
+
+全完了ターンで追加AI抽出を行い、有用な経験を**未検証の過去事例**として自動検索します。既存の承認済み記憶とは区別します。監視は初期状態で無効、traceは最大7日・profileあたり1 GiBです。[設定・モデル経路・記憶の境界・削除](docs/monitoring.ja.md)を確認してください。
