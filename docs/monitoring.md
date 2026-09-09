@@ -4,7 +4,7 @@ The optional monitor records Hermes **middleware requests and responses** with t
 
 ## Enable
 
-Install Node.js 22.12 or later separately, then use the interactive Hermes CLI in the intended profile:
+Install Node.js 22.12 or later separately, then use the interactive Hermes CLI or a Gateway chat in the intended profile:
 
 ```text
 /kiokuko-monitor enable
@@ -47,7 +47,7 @@ hermes kiokuko monitor retry RUN_ID
 hermes kiokuko monitor disable
 ```
 
-Status distinguishes enabled/runtime-ready, observed runs, incomplete capture, extraction jobs, missing sources and the last successful extraction. No runs means capture has not yet been demonstrated. `retry` retries failed extraction of an intact managed run; it never replays an API or tool call. Disabling monitoring also disables automatic experience recall; approved/file-verified recall continues. Administration is local CLI only. Gateway users get scoped memory recall, not monitor administration.
+Status distinguishes enabled/runtime-ready, observed runs, incomplete capture, extraction jobs, missing sources and the last successful extraction. No runs means capture has not yet been demonstrated. `retry` retries failed extraction of an intact managed run; it never replays an API or tool call. Disabling monitoring also disables automatic experience recall; approved/file-verified recall continues. Gateway status, enable and disable follow Hermes command permissions. Trace inspection, retry and purge remain terminal operations.
 
 The queue is limited to 128 events / 16 MiB and each event payload to 1 MiB. Overflow, writer failure and invalid identity prevent incomplete runs from generating experiences. Cancellation and provider exceptions retain their original behavior; a recorder error never retries a provider or tool. The writer uses private child-process pipes, not a listening server. Extraction is serialized per profile using an OS lock, including after a timed-out model worker.
 

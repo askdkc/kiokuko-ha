@@ -6,7 +6,7 @@
 
 | 環境 | 対象 | 結果 |
 |---|---|---|
-| macOS arm64 / Python 3.12.13 | unit・SQLite integration・固定Hermes integration（2026-09-09） | 171 passed |
+| macOS arm64 / Python 3.12.13 | unit・SQLite integration・固定Hermes integration（2026-09-09） | 200 passed |
 | macOS arm64 / Python 3.11.15 | unit・SQLite integration | 110 passed |
 | macOS arm64 / Python 3.13.14 | unit・SQLite integration | 110 passed |
 | distribution | sdistからwheel作成、SQL・plugin metadata・二つのentry point・Orca bundleとreader | 検証済み |
@@ -24,8 +24,9 @@ Hermesは`NousResearch/hermes-agent@13e72fb205b735df679e0fd5f5996a34ac4accc6`（
 - **検証付きcompaction**：実Hermesの`_pre_compress_memory_context`→MemoryManager→providerとsession endを通過。抽出モデル応答は固定し、実ファイルを照合。誤値・型違い・未認証履歴・未完了turn・rewind・古いrootへのCWD混線・symlink・secretの拒否、要約の誤記、根拠変更後の検索除外と無効化、purge後の再作成拒否を検証。
 - **curation**：インストールした`kioku-curation`を子processから起動し、実際の標準入力で選択・無効番号・確認から戻る・採用を実行。取消・EOF・Ctrl-C、共有範囲、batch競合時の全件rollback、候補更新後の有効な選択維持も試験。画面readerを用いた実機評価は未実施。
 - **slash curation（v0.1.1）**：固定Hermesのplugin discoveryと`HermesCLI.process_command()`から一覧・番号選択・確認コード・採用を実行。重複確定、選択変更、期限切れ、session・workspace・profile・principal変更、rewind、根拠変更・訂正・purge時の全件中止、DB busy時の選択保持を試験。実Gatewayのplugin dispatcherによる拒否と、bindされたDM/groupの拒否を確認。対話CLI参照・稼働状態・非同期呼出しの境界を検証。端末画面を操作した実機評価やGatewayの実ネットワーク配送は未実施。
-- **slash update（v0.1.1）**：固定Hermesへの登録、現在profileとPythonの固定、重複開始・venv lockによる競合拒否、失敗後のretry、Gateway拒否を試験。一時venvの模擬pipを実subprocessで起動し、引数・`HERMES_HOME`・pip設定の隔離・version確認を検証。異常終了・timeout・起動失敗を成功扱いせずlockを解放することを確認。PyPIからの実インストールや既存Hermes環境の更新はこの検証では実行していません。
-- **slash monitor**：実CLI dispatcherで状態表示・有効化・停止を検証。現在profileへの限定、Node不在・不正引数時の非変更、Gateway・委譲・実行中agentの拒否、稼働recorderの停止を含む10試験が成功。既存slash管理・監視integrationと合わせて45試験が成功。
+- **slash update（v0.1.1）**：固定Hermesへの登録、現在profileとPythonの固定、重複開始・venv lockによる競合拒否、失敗後のretry、受信イベントなしの呼出し拒否を試験。一時venvの模擬pipを実subprocessで起動し、引数・`HERMES_HOME`・pip設定の隔離・version確認を検証。異常終了・timeout・起動失敗を成功扱いせずlockを解放することを確認。PyPIからの実インストールや既存Hermes環境の更新はこの検証では実行していません。
+- **slash monitor**：実CLI dispatcherで状態表示・有効化・停止を検証。現在profileへの限定、Node不在・不正引数時の非変更、受信イベントなしのGateway呼出し・委譲・実行中agentの拒否、稼働recorderの停止を含む10試験が成功。既存slash管理・監視integrationと合わせて45試験が成功。
+- **Gateway管理コマンド**：固定Hermesの受信認証→command権限・hook→plugin dispatcherで、監視の状態確認・有効化・停止、更新の開始・statusを検証。DM/groupの権限、拒否hook、内部イベント、別タスク・引数・profileへの流用、コンテキストの再使用、同時受信を試験。認証の許可/拒否とpipは模擬結果を使い、Discordの実ネットワーク配送・リモートへのインストールは含みません。
 - **追加migration**：v1の記憶とkeyを保持してv2へ移行し、v1 checksum不一致では移行しないことを検証。
 
 - **Orca監視**：CLIとGatewayの実AIAgent→実OpenAI SDK→localhost HTTP→実Node writer→同梱Python readerを通過。通常応答・SSEからの集約応答・実tool loopを記録。固定抽出結果を保存し、次ターンの実HTTP要求へ未検証ラベル付きで注入。A/B・groupの同時middleware、429/500/timeout/キャンセル、監視ON/OFFでの要求・応答・実行回数の維持、補助モデルの実HTTP呼び出しとfallback禁止を検証。

@@ -1,4 +1,4 @@
-"""Update the running Hermes venv on explicit local human command."""
+"""Update the running Hermes venv on an authorized human command."""
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -87,7 +87,10 @@ class SlashUpdate:
         self.ctx = ctx
 
     def __call__(self, raw_args):
-        global _job
+        from .gateway_commands import dispatch
+        routed = dispatch(self.ctx, "kiokuko-update", raw_args)
+        if routed is not None:
+            return routed
         try:
             home, session = cli_binding(self.ctx)
             # Reject delegated/background contexts too, without opening a DB or
@@ -99,6 +102,18 @@ class SlashUpdate:
             if is_delegated_child_context() or get_current_write_origin() == "background_review" or \
                     (bound.get("ID") and bound["ID"] != session):
                 raise KiokukoError("CURATION_CLI_REQUIRED")
+            return self.execute(home, raw_args)
+        except KiokukoError as error:
+            if error.code == "CURATION_CLI_REQUIRED":
+                return "更新はHermesの対話CLIで実行してください。この呼出経路では管理者を確認できません。"
+            return f"更新を開始できませんでした ({error.code})。別の更新処理やprofile設定を確認してください。"
+        except (OSError, ValueError, AttributeError, ImportError, RuntimeError):
+            return "更新を開始できませんでした (UPDATE_UNAVAILABLE)。HermesのPython環境と権限を確認してください。"
+
+    def execute(self, home, raw_args):
+        """Shared operation; callers must authorize the CLI or Gateway envelope first."""
+        global _job
+        try:
             action = raw_args.strip()
             if action not in {"", "status", "retry", "help"}:
                 return "操作: /kiokuko-update / 状態: /kiokuko-update status / 再試行: /kiokuko-update retry"

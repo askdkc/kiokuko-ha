@@ -43,14 +43,14 @@ export HERMES_HOME="$HOME/.hermes/profiles/main"
 
 ## 更新
 
-v0.1.1以降では、Hermesの対話CLI内から更新できます。
+Hermesの対話CLI・Discord・Telegramなどのチャットから更新できます。
 
 ```text
 /kiokuko-update
 /kiokuko-update status
 ```
 
-Hermesを実行しているPythonを使い、現在のprofileを`HERMES_HOME`で明示してバックグラウンド更新します。更新対象はPyPIの`hermes-kiokuko`です（リポジトリ名は`kiokuko-ha`）。同じPython環境を共有するprofileには同じパッケージ更新が適用されます。profileの設定・記憶DBは変更しません。失敗時は`/kiokuko-update retry`で再試行できます。この管理コマンドはローカルの対話CLI専用で、Telegram・Discordのチャットからは実行できません。
+Hermesを実行しているPythonを使い、現在のprofileを`HERMES_HOME`で明示してバックグラウンド更新します。更新対象はPyPIの`hermes-kiokuko`です（リポジトリ名は`kiokuko-ha`）。同じPython環境を共有するprofileには同じパッケージ更新が適用されます。profileの設定・記憶DBは変更しません。失敗時は`/kiokuko-update retry`で再試行できます。GatewayではHermesのコマンド権限設定に従います。
 
 v0.1.0からの初回更新や、端末から更新する場合：
 
@@ -104,7 +104,7 @@ kioku-curation
 
 ## 任意のAPI監視・経験記憶
 
-HermesのCLI・GatewayからOpenAI互換APIへの要求・応答をOrcaReplayへ記録できます。Node.js 22.12以降を用意し、対象profileのHermes対話CLIで有効化・状態確認します。
+HermesのCLI・GatewayからOpenAI互換APIへの要求・応答をOrcaReplayへ記録できます。Node.js 22.12以降を用意し、対象profileのHermes対話CLIまたはチャットで有効化・状態確認します。
 
 ```text
 /kiokuko-monitor enable

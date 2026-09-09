@@ -4,7 +4,7 @@ OrcaReplayの記録処理を使い、Hermesの**middleware境界の要求・応�
 
 ## 有効化
 
-Node.js 22.12以降を別途用意し、対象profileのHermes対話CLIで実行します。
+Node.js 22.12以降を別途用意し、対象profileのHermes対話CLIまたはチャットで実行します。
 
 ```text
 /kiokuko-monitor enable
@@ -49,7 +49,7 @@ hermes kiokuko monitor retry RUN_ID
 hermes kiokuko monitor disable
 ```
 
-statusでは有効化、Nodeの準備状態、runの取得状態、抽出job、元記録の欠落、直近の抽出成功を区別します。取得0件は監視成功の証拠になりません。retryは完全な管理対象runの失敗した抽出を再試行し、APIやtoolは再実行しません。管理操作はローカルCLI専用です。監視の停止中は経験の自動検索も停止し、承認済み・検証済み記憶の利用は継続します。
+statusでは有効化、Nodeの準備状態、runの取得状態、抽出job、元記録の欠落、直近の抽出成功を区別します。取得0件は監視成功の証拠になりません。retryは完全な管理対象runの失敗した抽出を再試行し、APIやtoolは再実行しません。Gatewayの状態確認・有効化・停止はHermesのコマンド権限設定に従います。traceの表示・再試行・削除は端末から実行します。監視の停止中は経験の自動検索も停止し、承認済み・検証済み記憶の利用は継続します。
 
 queueは128イベント・16 MiB、1イベント本文は1 MiBまでです。超過、Node障害、本人情報の不一致では欠落を明示します。記録失敗でもHermesの元の応答・例外・実行回数を維持します。Nodeとの通信は子プロセスのpipeで行い、ネットワーク待受を作りません。
 

@@ -27,10 +27,16 @@ def register(ctx):
                          description="検証済み記憶の選択・Global共有（対話CLI）",
                          args_hint="[show|select 1 3|all|none|share|confirm CODE|cancel|help]")
     from .slash_update import SlashUpdate
-    ctx.register_command("kiokuko-update", SlashUpdate(ctx),
-                         description="現在のHermes用Python環境のKiokukoを更新（対話CLI）",
+    update = SlashUpdate(ctx)
+    ctx.register_command("kiokuko-update", update,
+                         description="現在のHermes用Python環境のKiokukoを更新",
                          args_hint="[status|retry|help]")
     from .slash_monitor import SlashMonitor
-    ctx.register_command("kiokuko-monitor", SlashMonitor(ctx),
-                         description="記憶の監視・自動抽出の状態確認と切替（対話CLI）",
+    monitor = SlashMonitor(ctx)
+    ctx.register_command("kiokuko-monitor", monitor,
+                         description="記憶の監視・自動抽出の状態確認と切替",
                          args_hint="[enable|disable|status]")
+    from .gateway_commands import GatewayCommands
+    ctx.register_hook("pre_gateway_dispatch", GatewayCommands(ctx, {
+        "kiokuko-update": update, "kiokuko-monitor": monitor,
+    }))

@@ -1,9 +1,9 @@
-"""Interactive CLI controls for the current profile's monitor."""
+"""Human command controls for the current profile's monitor."""
 from types import SimpleNamespace
 
 from .compatibility import check_host
 from .errors import KiokukoError
-from .monitor_cli import execute
+from .monitor_cli import _execute
 from .service import Service
 from .slash_curation import cli_binding
 from .store import Store
@@ -32,6 +32,10 @@ class SlashMonitor:
         self.ctx = ctx
 
     def __call__(self, raw_args):
+        from .gateway_commands import dispatch
+        routed = dispatch(self.ctx, "kiokuko-monitor", raw_args)
+        if routed is not None:
+            return routed
         try:
             home, session = cli_binding(self.ctx)
             from agent.delegation_context import is_delegated_child_context
@@ -41,13 +45,24 @@ class SlashMonitor:
             if is_delegated_child_context() or get_current_write_origin() == 'background_review' or \
                     (bound.get('ID') and bound['ID'] != session):
                 raise KiokukoError('LOCAL_CLI_REQUIRED')
+            return self.execute(home, raw_args)
+        except KiokukoError as error:
+            if error.code in {'CURATION_CLI_REQUIRED', 'LOCAL_CLI_REQUIRED'}:
+                return 'この操作はHermesの対話CLIで実行してください。'
+            return f'監視を操作できませんでした ({error.code})。'
+        except (OSError, ValueError, AttributeError, ImportError, RuntimeError):
+            return '監視を操作できませんでした (MONITOR_UNAVAILABLE)。'
+
+    def execute(self, home, raw_args):
+        """Shared operation; callers must authorize the CLI or Gateway envelope first."""
+        try:
             action = raw_args.strip() or 'status'
             if action not in {'enable', 'disable', 'status'}:
                 return HELP
             check_host(home)
             store = Store(home)
             try:
-                info = execute(Service(store, host_guard=check_host), SimpleNamespace(monitor_action=action))
+                info = _execute(Service(store, host_guard=check_host), SimpleNamespace(monitor_action=action))
             finally:
                 store.close()
             from hermes_cli.profiles import get_active_profile_name

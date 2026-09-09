@@ -1,4 +1,4 @@
-"""Local administrator controls. Never exposed as a model tool or gateway command."""
+"""Monitor administration. CLI and authenticated Gateway commands share operations."""
 from .config import load_config, write_yaml
 from .errors import KiokukoError
 from .filesystem import file_lock
@@ -15,11 +15,16 @@ def setup_parser(parser):
 
 
 def execute(service, args):
-    from .monitor import status, remove_run
     from .identity import bound_values
     bound = bound_values()
     if bound.get('PLATFORM') not in {None, '', 'cli'} or bound.get('USER_ID') or bound.get('CHAT_TYPE') in {'group','dm','private'}:
         raise KiokukoError('LOCAL_CLI_REQUIRED')
+    return _execute(service, args)
+
+
+def _execute(service, args):
+    """Called only after the entry point has authorized the administrator."""
+    from .monitor import status, remove_run
     action = args.monitor_action
     if action in {'enable','disable'}:
         if action == 'enable':

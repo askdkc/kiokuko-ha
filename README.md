@@ -43,14 +43,14 @@ export HERMES_HOME="$HOME/.hermes/profiles/main"
 
 ## Update
 
-With v0.1.1 or later installed, run these commands inside an interactive Hermes CLI session:
+Run these commands in the interactive Hermes CLI or a Gateway chat such as Discord or Telegram:
 
 ```text
 /kiokuko-update
 /kiokuko-update status
 ```
 
-The update runs in the background using Hermes's own Python interpreter, with the current profile explicitly passed as `HERMES_HOME`. It upgrades the PyPI package `hermes-kiokuko` (the repository is named `kiokuko-ha`). Profiles sharing that Python environment receive the same package update; profile settings and memory databases are left intact. Use `/kiokuko-update retry` after a failure. This administrative command is available in the local interactive CLI, not Telegram/Discord chats.
+The update runs in the background using Hermes's own Python interpreter, with the current profile explicitly passed as `HERMES_HOME`. It upgrades the PyPI package `hermes-kiokuko` (the repository is named `kiokuko-ha`). Profiles sharing that Python environment receive the same package update; profile settings and memory databases are left intact. Use `/kiokuko-update retry` after a failure. Gateway access follows Hermes command permissions.
 
 For the first upgrade from v0.1.0, or to update from a terminal:
 
@@ -104,7 +104,7 @@ See [curation details](docs/curation.md), [operational boundaries](docs/operatio
 
 ## Optional API monitoring and experience memory
 
-OrcaReplay records Hermes's OpenAI-compatible API requests and responses from the CLI and Gateway. With Node.js 22.12 or later installed, enable monitoring and check its status in the interactive Hermes CLI for the intended profile:
+OrcaReplay records Hermes's OpenAI-compatible API requests and responses from the CLI and Gateway. With Node.js 22.12 or later installed, enable monitoring and check its status in the interactive Hermes CLI or a Gateway chat for the intended profile:
 
 ```text
 /kiokuko-monitor enable
