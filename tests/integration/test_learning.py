@@ -425,17 +425,25 @@ def test_user_correction_survives_source_purge_without_automatic_history(enabled
         assert not db.execute('PRAGMA foreign_key_check').fetchall()
 
 
-def test_mode_toggle_cancels_inflight_even_when_restored_to_auto(enabled,make_turn):
+def test_mode_toggle_cancels_inflight_even_when_restored_to_auto(enabled,make_turn,monkeypatch):
     mode(enabled)
     add(enabled,make_turn,'a')
-    from hermes_kiokuko.learning_cli import execute
+    from hermes_kiokuko import learning_cli
+    # This integration test exercises cancellation with an authenticated local
+    # CLI context; the release test environment does not install Hermes Gateway.
+    monkeypatch.setattr(learning_cli,'bound_values',lambda:{'PLATFORM':'cli'})
+    transitions=[]
     def toggle(home,payload):
-        execute(enabled,'off');execute(enabled,'auto')
+        for value in ('off','auto'):
+            transitions.append(learning_cli.execute(enabled,value)['mode'])
         return draft(payload)
     assert not learning.process_next(enabled,extractor=toggle)
+    # process_next records extractor exceptions as job failures. Assert the
+    # setup actually completed so such errors cannot masquerade as cancellation.
+    assert transitions==['off','auto']
     with enabled.transaction() as db:
         assert db.execute('SELECT count(*) FROM lessons').fetchone()[0]==0
-        assert db.execute('SELECT state FROM learning_jobs').fetchone()[0]=='pending'
+        assert tuple(db.execute('SELECT state,lease_token,error_code FROM learning_jobs').fetchone())==('pending',None,None)
 
 
 def test_shadow_reads_do_not_restart_completed_learning(enabled,make_turn):
