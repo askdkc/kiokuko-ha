@@ -38,7 +38,7 @@ def _execute(service, args):
             release_home(service.store.home)
         return {**status(service), 'additional_model_calls': 'all completed turns',
                 'scope': 'principal/workspace for CLI and DM; conversation/workspace for groups',
-                'memory_promotion': 'unverified experience only', 'experience_valid_days':90}
+                'memory_promotion': 'historical experiences; derived lessons follow the learning mode and evidence gates', 'experience_valid_days':90}
     if action == 'status':
         return status(service)
     if action == 'runs':
@@ -50,6 +50,10 @@ def _execute(service, args):
             raise KiokukoError('MONITOR_RUN_NOT_FOUND')
         row = dict(row)
     if action == 'show':
+        import json
+        with service.transaction() as db:
+            coverage = db.execute('SELECT * FROM experience_coverage WHERE run_id=?',(args.run_id,)).fetchone()
+        row['extraction_coverage'] = {'window_count':coverage['window_count'],'excluded':json.loads(coverage['excluded_json'])} if coverage else None
         if row['state'] != 'complete':
             return {'run':row, 'events':[], 'complete':False}
         try:
@@ -59,7 +63,7 @@ def _execute(service, args):
             return {'run':row,'error':e.code,'complete':False}
     if action == 'purge':
         remove_run(service,args.run_id)
-        return {'run_id':args.run_id,'purged':True,'scope':'Source trace and extraction job. Derived memories, Hermes history and backups are separate.'}
+        return {'run_id':args.run_id,'purged':True,'scope':'Source trace, pending extraction and dependent automatic lessons. Experiences are expired; Hermes history and backups are separate.'}
     if action == 'retry':
         read_trace(service.store.directory,row)
         if row['state'] != 'complete' or not service.config['monitor']['enabled']:

@@ -72,8 +72,10 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
     with service.transaction(snapshot, write=True, deadline=deadline) as db:
         from .facts import expire_stale
         expire_stale(service, db, snapshot)
-        for expired in db.execute("SELECT * FROM memory_entries WHERE state='active' AND valid_until IS NOT NULL AND valid_until<=?", (now(),)).fetchall():
+        for expired in db.execute("SELECT * FROM memory_entries WHERE state='active' AND epistemic_status<>'derived_lesson' AND valid_until IS NOT NULL AND valid_until<=?", (now(),)).fetchall():
             service._change(db, dict(expired), "expire_request")
+        from .learning import refresh
+        refresh(service,db)
         lineage = ancestors(db, snapshot.session_id)
         observed = verified_history(service, db, history, lineage)
         observe(db, observed)
@@ -117,6 +119,11 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
             parts.append("KIOKUKO CORRECTION: All Kiokuko entries in contexts preceding this delivery are invalid. Use only entries below or request a fresh recall.")
         if service.config["context_injection"]["enabled"]:
             entries += search(db, snapshot, query, service.config)
+        from .learning import matches
+        lesson_sources = {r[0] for e in entries if e['epistemic_status']=='derived_lesson' and matches(db,e,query)
+                          for r in db.execute('SELECT source_id FROM lesson_sources WHERE entry_id=? AND entry_revision=?', (e['id'],e['current_revision']))}
+        entries = [e for e in entries if e['id'] not in lesson_sources]
+        entries.sort(key=lambda e:e['epistemic_status'] in {'observed_experience','derived_lesson'})
         selected, emitted = [], set()
         experience_count, experience_chars = 0, 0
         for entry in entries:
@@ -127,10 +134,13 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
                 service.validate_content(entry["claim"])
             except KiokukoError:
                 continue
-            is_experience = entry["epistemic_status"] == "observed_experience"
+            from .learning import matches
+            if entry['epistemic_status'] == 'derived_lesson' and not matches(db,entry,query):
+                continue
+            is_experience = entry['epistemic_status'] in {'observed_experience','derived_lesson'}
             text = f"[{entry['id']}@{entry['current_revision']}][{entry['scope_type']}][{entry['epistemic_status']}]\n{entry['claim']}"
             if is_experience:
-                text = "未検証の過去事例（要約と推論は未確認）\n" + text
+                text = ("過去経験からの推論（現在の条件を確認）\n" if entry['epistemic_status']=='derived_lesson' else "未検証の過去事例（要約と推論は未確認）\n") + text
                 if experience_count >= 2 or experience_chars + len(text) > 800:
                     continue
             if len('\n\n'.join(parts + [text])) + reserve > budget or len(selected) >= service.config["context_injection"]["max_entries"]:

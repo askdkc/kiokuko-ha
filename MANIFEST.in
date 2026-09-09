@@ -4,3 +4,4 @@ recursive-include scripts *.py
 recursive-include tools/orca *.mjs
 recursive-include tests *.json
 recursive-include src/hermes_kiokuko/orca *
+recursive-include benchmarks *.py *.json

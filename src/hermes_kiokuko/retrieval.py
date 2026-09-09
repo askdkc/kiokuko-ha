@@ -41,6 +41,9 @@ def eligible(entry, snapshot, config, db=None):
     cfg = config["context_injection"]
     if not can_read(entry, snapshot) or entry["state"] != "active":
         return False
+    if entry['epistemic_status'] == 'derived_lesson':
+        from .learning import usable
+        return db is not None and usable(db,entry,config)
     if entry["epistemic_status"] == "observed_experience":
         return bool(db is not None and config["monitor"]["enabled"] and entry["kind"] == "experience"
             and entry["confirmation_kind"] is None and entry["valid_until"] and entry["valid_until"] > now()
@@ -59,7 +62,8 @@ def eligible(entry, snapshot, config, db=None):
 def search(db, snapshot, query, config, *, conflicts=False):
     scope, values = scope_sql(snapshot)
     if conflicts:
-        return [dict(row) for row in db.execute(f"SELECT * FROM memory_entries WHERE {scope} AND state='conflicted' ORDER BY id LIMIT 64", values)]
+        lesson_filter = " AND epistemic_status<>'derived_lesson'" if config['experience_learning']['mode']!='auto' else ''
+        return [dict(row) for row in db.execute(f"SELECT * FROM memory_entries WHERE {scope} AND state='conflicted'{lesson_filter} ORDER BY id LIMIT 64", values)]
     query_tokens = sorted(tokens(str(query)[:600]), key=lambda token: (-len(token), token))[:64]
     predicate, params, prefix = "", [], ""
     score = "0"
@@ -74,15 +78,19 @@ def search(db, snapshot, query, config, *, conflicts=False):
         prefix = "WITH hits AS (" + hit_sql + ") "
         score = "COALESCE((SELECT sum(score) FROM hits WHERE hits.entry_id=memory_entries.id),0)"
         predicate = " AND (pinned=1 OR id IN (SELECT entry_id FROM hits))"
-    rows = db.execute(prefix + f"SELECT *,{score} AS lexical_score FROM memory_entries WHERE {scope} AND state='active' AND (auto_inject=1 OR epistemic_status IN ('file_verified','observed_experience'))" + predicate +
-                      " ORDER BY (epistemic_status='observed_experience'),pinned DESC,lexical_score DESC,authority DESC,id LIMIT ?", (*params, *values, config["retrieval"]["candidate_limit"])).fetchall()
+    rows = db.execute(prefix + f"SELECT *,{score} AS lexical_score FROM memory_entries WHERE {scope} AND state='active' AND (auto_inject=1 OR epistemic_status IN ('file_verified','observed_experience','derived_lesson'))" + predicate +
+                      " ORDER BY (epistemic_status IN ('observed_experience','derived_lesson')),pinned DESC,lexical_score DESC,authority DESC,id LIMIT ?", (*params, *values, config["retrieval"]["candidate_limit"])).fetchall()
     candidates = [dict(row) for row in rows if eligible(row, snapshot, config, db)
                   and (row["epistemic_status"] != "observed_experience" or (query_tokens and row["lexical_score"] > 0))]
-    query_set = set(query_tokens)
+    from .learning import matches
+    candidates = [e for e in candidates if e['epistemic_status'] != 'derived_lesson' or matches(db,e,query)]
     def rank(entry):
         relevance = entry["lexical_score"]
         specificity = 5 if "workspace" in entry["scope_type"] else 0
         verified_bonus = 10 if entry["epistemic_status"] == "file_verified" and entry["workspace_id"] == snapshot.workspace_id else 0
-        return (entry["epistemic_status"] == "observed_experience", -entry["pinned"], -(relevance + specificity + verified_bonus + entry["authority"] / 10), entry["id"])
+        return (entry["epistemic_status"] in {"observed_experience","derived_lesson"}, -entry["pinned"], -(relevance + specificity + verified_bonus + entry["authority"] / 10), entry["id"])
     candidates.sort(key=rank)
-    return candidates
+    # Prefer an applicable lesson over its supporting individual examples.
+    lessons = [e for e in candidates if e['epistemic_status']=='derived_lesson']
+    source_ids = {r[0] for e in lessons for r in db.execute('SELECT source_id FROM lesson_sources WHERE entry_id=? AND entry_revision=?', (e['id'],e['current_revision']))}
+    return [e for e in candidates if e['id'] not in source_ids]

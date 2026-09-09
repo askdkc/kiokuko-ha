@@ -16,7 +16,7 @@ def assistant_text(response):
     return '\n'.join(parts)
 
 
-def extract_response(client, model, kwargs):
+def extract_response(client, model, kwargs, *, metrics=None):
     # Use Hermes' route-specific request conversion, OAuth client and stream assembler.
     # Do not call its auxiliary fallback/retry ladder or change the configured provider.
     from agent.auxiliary_client import _CodexCompletionsAdapter, _CodexStreamGuard, aux_stream_deadline
@@ -54,6 +54,9 @@ def extract_response(client, model, kwargs):
         # Extraction must not accept even valid-looking JSON from a truncated stream.
         if not completed or getattr(response, 'status', None) != 'completed':
             raise KiokukoError('EXPERIENCE_INCOMPLETE')
+        if metrics is not None:
+            usage = getattr(response,'usage',None)
+            metrics.update(input_tokens=getattr(usage,'input_tokens',None),output_tokens=getattr(usage,'output_tokens',None))
         return assistant_text(payload(response))
     finally:
         guard.finish()

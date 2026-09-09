@@ -153,13 +153,23 @@ class Service:
     def get(self, snapshot, entry_id, *, history=False):
         with self.transaction(snapshot) as db:
             entry = self._entry(db, entry_id, snapshot)
+            lessons_visible = self.config['experience_learning']['mode'] == 'auto'
+            if entry['epistemic_status']=='derived_lesson' and not lessons_visible:
+                raise KiokukoError('ENTRY_UNAVAILABLE')
             if history:
                 revisions = []
                 for row in db.execute("SELECT revision,operation,snapshot_json,created_at FROM memory_revisions WHERE entry_id=? ORDER BY revision", (entry_id,)):
                     historical = json.loads(row["snapshot_json"])
-                    if can_read(historical, snapshot):
-                        revisions.append(dict(row))
+                    if can_read(historical, snapshot) and (lessons_visible or historical['epistemic_status']!='derived_lesson'):
+                        item = dict(row)
+                        if historical['epistemic_status'] == 'derived_lesson':
+                            from .learning import details as lesson_details
+                            item.update(lesson_details(db, historical, row['revision']))
+                        revisions.append(item)
                 return revisions
+            if entry['epistemic_status'] == 'derived_lesson':
+                from .learning import details as lesson_details
+                return {**entry, **lesson_details(db,entry)}
             from .experiences import details
             return details(db, entry)
 
@@ -211,6 +221,11 @@ class Service:
                    (entry_id, entry_id, revision))
 
     def _change(self, db, entry, action, *, body=None, approved=False, scope=None, workspace=None, actor=None):
+        from .learning import detach, invalidate_source
+        if entry['epistemic_status'] == 'derived_lesson':
+            detach(db,entry['id'])
+        if entry['epistemic_status'] == 'observed_experience':
+            invalidate_source(self,db,entry['id'],action)
         previous = entry["current_revision"]
         entry = dict(entry)
         entry.update(current_revision=previous + 1, updated_at=now())
@@ -405,3 +420,9 @@ class Service:
                 raise KiokukoError("DELIVERY_UNAVAILABLE")
             insert(db, "retrieval_feedback", {"id": new_id("feedback"), "delivery_id": delivery_id, "entry_id": entry_id,
                    "entry_revision": revision, "verdict": verdict, "actor": snapshot.principal_id or "unknown", "created_at": now()})
+            from .learning import enqueue, current_lesson, suspend
+            family = db.execute('SELECT family_hash FROM lesson_families WHERE entry_id=? AND detached=0', (entry_id,)).fetchone()
+            if family:
+                if verdict in {'stale','conflicting'} and (lesson := current_lesson(db,family[0])):
+                    suspend(self,db,dict(lesson),'feedback-recheck')
+                enqueue(db,family[0])

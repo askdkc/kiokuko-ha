@@ -100,6 +100,8 @@ class Monitor:
             with file_lock(self.service.store.directory / 'experience.lock', exclusive=True, timeout=0):
                 with self.service.transaction(write=True) as db:
                     db.execute("UPDATE experience_jobs SET state='pending' WHERE state='running'")
+                    db.execute('DELETE FROM experience_leases')
+                    db.execute("UPDATE learning_jobs SET state='pending',lease_token=NULL WHERE state='running'")
         except KiokukoError:
             pass
 
@@ -323,7 +325,10 @@ class Monitor:
                     if time.monotonic() - last_gc > 60:
                         collect(self.service)
                         last_gc = time.monotonic()
-                    if process_next(self.service):
+                    if process_next(self.service,cancelled=self.stopping.is_set):
+                        continue
+                    from .learning import process_next as learn_next
+                    if learn_next(self.service,cancelled=self.stopping.is_set):
                         continue
                 else:
                     with self.lock:
@@ -338,10 +343,17 @@ class Monitor:
     def wait_idle(self, timeout=15):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            with self.service.transaction() as db:
-                pending = db.execute("SELECT count(*) FROM experience_jobs WHERE state IN ('pending','running')").fetchone()[0]
-            if not self.queue.unfinished_tasks and not pending and not self.captures:
-                return True
+            # The writer commits pending jobs before removing captures. Hold the
+            # capture lock while reading: an old DB snapshot + newly empty captures
+            # must not be mistaken for idle.
+            with self.lock:
+                if not self.queue.unfinished_tasks and not self.captures:
+                    with self.service.transaction() as db:
+                        pending = db.execute("SELECT count(*) FROM experience_jobs WHERE state IN ('pending','running')").fetchone()[0]
+                        if self.service.config['experience_learning']['mode'] != 'off':
+                            pending += db.execute("SELECT count(*) FROM learning_jobs WHERE state IN ('pending','running')").fetchone()[0]
+                    if not pending:
+                        return True
             self.stopping.wait(.02)
         return False
 
@@ -395,6 +407,15 @@ def _remove_run_locked(service, run_id, *, missing=False):
             raise KiokukoError('MONITOR_RUN_NOT_FOUND')
         if row[0] == 'recording':
             raise KiokukoError('MONITOR_RUN_ACTIVE')
+        if not missing:
+            from .learning import purge_dependents
+            for source in db.execute('SELECT entry_id FROM experience_sources WHERE run_id=?',(run_id,)).fetchall():
+                purge_dependents(service,db,source[0])
+                entry = db.execute('SELECT * FROM memory_entries WHERE id=?',(source[0],)).fetchone()
+                if entry and entry['epistemic_status']=='observed_experience':
+                    service._change(db,dict(entry),'expire_request',actor='source-purge')
+        db.execute('DELETE FROM experience_windows WHERE run_id=?',(run_id,))
+        db.execute('DELETE FROM experience_leases WHERE run_id=?',(run_id,))
         db.execute('UPDATE monitor_runs SET state=?,bytes=0,error_code=? WHERE id=?',
             ('missing' if missing else 'purged', 'MONITOR_SOURCE_MISSING' if missing else 'MONITOR_PURGED', run_id))
         db.execute("UPDATE experience_jobs SET state='blocked',error_code='MONITOR_SOURCE_MISSING',updated_at=? WHERE run_id=?", (now(), run_id))
@@ -409,6 +430,8 @@ def status(service):
         runs = dict(db.execute('SELECT state,count(*) FROM monitor_runs GROUP BY state'))
         jobs = dict(db.execute('SELECT state,count(*) FROM experience_jobs GROUP BY state'))
         last = db.execute("SELECT max(updated_at) FROM experience_jobs WHERE state='done'").fetchone()[0]
+        from .learning import status as learning_status
+        learning = learning_status(db,service.config)
         rows = [dict(r) for r in db.execute('SELECT * FROM monitor_runs')]
     size, missing = 0, 0
     for row in rows:
@@ -423,7 +446,7 @@ def status(service):
             node = 'ready'
         except KiokukoError as e:
             node = e.code
-    return {'enabled': service.config['monitor']['enabled'], 'node': node, 'runs': runs,
+    return {'learning':learning, 'enabled': service.config['monitor']['enabled'], 'node': node, 'runs': runs,
             'jobs': jobs, 'last_extraction_success': last, 'bytes': size, 'source_missing': missing,
             'capture_observed': any(row['api_requests'] > 0 for row in rows),
             'api_requests': sum(row['api_requests'] for row in rows),

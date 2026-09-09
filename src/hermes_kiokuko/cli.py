@@ -22,6 +22,8 @@ def setup_parser(parser):
         sub.add_parser(command)
     from .monitor_cli import setup_parser as monitor_parser
     monitor_parser(sub.add_parser("monitor"))
+    learning = sub.add_parser('learning')
+    learning.add_argument('learning_action',nargs='?',default='status',choices=['off','shadow','auto','status','retry'])
     search = sub.add_parser("search")
     search.add_argument("query")
     for command in ("show", "history", "approve", "reject", "purge", "purge-candidate"):
@@ -83,6 +85,9 @@ def execute(args, home, *, input_fn=input, output=print):
     store = Store(home, initialize=action in {"remember", "import-native-user-profile"})
     try:
         service = Service(store, host_guard=check_host, content_guard=host_scan)
+        if action == 'learning':
+            from .learning_cli import execute as execute_learning
+            return execute_learning(service,args.learning_action)
         if action == "monitor":
             from .monitor_cli import execute as execute_monitor
             return execute_monitor(service, args)
@@ -125,7 +130,13 @@ def execute(args, home, *, input_fn=input, output=print):
                 with service.transaction() as db:
                     from .experiences import details
                     entry = service._entry(db, args.id, admin=True)
-                    return [dict(row) for row in db.execute("SELECT * FROM memory_revisions WHERE entry_id=? ORDER BY revision", (args.id,))] if action == "history" else details(db, entry)
+                    from .learning import details as lesson_details
+                    if action == 'history':
+                        rows = [dict(row) for row in db.execute("SELECT * FROM memory_revisions WHERE entry_id=? ORDER BY revision", (args.id,))]
+                        for row in rows:
+                            row.update(lesson_details(db,entry,row['revision']))
+                        return rows
+                    return {**details(db,entry), **lesson_details(db,entry)}
             return service.search(snap, getattr(args, "query", ""), conflicts=action == "conflicts")
         if action == "pending":
             with service.transaction() as db:

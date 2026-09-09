@@ -252,6 +252,9 @@ def test_v2_migration_preserves_identity(service):
     home,key=service.store.home,service.store.key
     service.store.close()
     with sqlite3.connect(service.store.path) as db:
+        for table in ('lesson_sources', 'lessons', 'lesson_families', 'learning_receipts', 'learning_jobs', 'experience_relations', 'experience_features', 'experience_leases', 'experience_windows', 'experience_coverage'):
+            db.execute("DROP TABLE " + table)
+        db.execute("DELETE FROM schema_migrations WHERE version=4")
         for table in ('experience_sources','experience_receipts','experiences','experience_jobs','monitor_runs'):
             db.execute('DROP TABLE '+table)
         db.execute('DELETE FROM schema_migrations WHERE version=3')
@@ -261,7 +264,7 @@ def test_v2_migration_preserves_identity(service):
     try:
         assert store.key==key
         with store.transaction() as db:
-            assert db.execute('PRAGMA user_version').fetchone()[0]==3
+            assert db.execute('PRAGMA user_version').fetchone()[0]==4
     finally:
         store.close()
 

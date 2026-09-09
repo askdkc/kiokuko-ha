@@ -21,8 +21,11 @@ FACT_CHECKSUM = hashlib.sha256(FACT_SCHEMA.encode()).hexdigest()
 V2_CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA).encode()).hexdigest()
 MONITOR_SCHEMA = files("hermes_kiokuko").joinpath("migrations/003_monitor.sql").read_text()
 MONITOR_CHECKSUM = hashlib.sha256(MONITOR_SCHEMA.encode()).hexdigest()
-CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA).encode()).hexdigest()
-SCHEMA_VERSION = 3
+V3_CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA).encode()).hexdigest()
+LEARNING_SCHEMA = files("hermes_kiokuko").joinpath("migrations/004_learning.sql").read_text()
+LEARNING_CHECKSUM = hashlib.sha256(LEARNING_SCHEMA.encode()).hexdigest()
+CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA + LEARNING_SCHEMA).encode()).hexdigest()
+SCHEMA_VERSION = 4
 
 
 def execute_statements(db, script):
@@ -139,6 +142,14 @@ class Store:
                 db.execute("INSERT INTO schema_migrations VALUES (3,?,?)", (MONITOR_CHECKSUM, now()))
                 db.execute("PRAGMA user_version=3")
                 db.execute("UPDATE store_metadata SET value=? WHERE key='schema_hash'", (schema_digest(db),))
+            if db.execute("PRAGMA user_version").fetchone()[0] == 3:
+                self.guard(db, version=3)
+                if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or db.execute("PRAGMA foreign_key_check").fetchone():
+                    raise KiokukoError("DATABASE_INTEGRITY_FAILED")
+                execute_statements(db, LEARNING_SCHEMA)
+                db.execute("INSERT INTO schema_migrations VALUES (4,?,?)", (LEARNING_CHECKSUM, now()))
+                db.execute("PRAGMA user_version=4")
+                db.execute("UPDATE store_metadata SET value=? WHERE key='schema_hash'", (schema_digest(db),))
             self.guard(db)
             db.commit()
         except sqlite3.Error:
@@ -163,7 +174,7 @@ class Store:
                 db.execute("PRAGMA user_version").fetchone()[0] != version:
             raise KiokukoError("SCHEMA_MISMATCH")
         rows = db.execute("SELECT version,checksum FROM schema_migrations").fetchall()
-        expected = [(1, INITIAL_CHECKSUM)] + ([(2, FACT_CHECKSUM)] if version >= 2 else []) + ([(3, MONITOR_CHECKSUM)] if version >= 3 else [])
+        expected = [(1, INITIAL_CHECKSUM)] + ([(2, FACT_CHECKSUM)] if version >= 2 else []) + ([(3, MONITOR_CHECKSUM)] if version >= 3 else []) + ([(4, LEARNING_CHECKSUM)] if version >= 4 else [])
         if sorted(tuple(row) for row in rows) != expected:
             raise KiokukoError("CHECKSUM_MISMATCH")
         meta = dict(db.execute("SELECT key,value FROM store_metadata").fetchall())

@@ -113,4 +113,4 @@ OrcaReplay records Hermes's OpenAI-compatible API requests and responses from th
 
 Stop with `/kiokuko-monitor disable`.
 
-Every completed turn schedules an additional model extraction call; useful experiences can be recalled automatically as **unverified historical examples**, separately from approved memory. Monitoring is initially disabled; traces are retained for at most seven days / 1 GiB per profile. See [setup, model routing, boundaries and deletion](docs/monitoring.md).
+Every completed turn schedules additional model extraction (up to four windows); useful experiences can be recalled automatically as **unverified historical examples**, separately from approved memory. Monitoring is initially disabled; traces are retained for at most seven days / 1 GiB per profile. See [setup, model routing, boundaries and deletion](docs/monitoring.md). Optional derived lessons add evidence-based updates and conditional recall, with learning initially **off**. See [learning controls and evaluation](docs/learning.md).

@@ -11,7 +11,7 @@ import tempfile
 from .errors import KiokukoError
 from .filesystem import atomic_write, checked_file, file_lock, private_directory, sync_directory
 from .models import canonical, digest, now
-from .store import CHECKSUM, INITIAL_CHECKSUM, V2_CHECKSUM, SCHEMA_VERSION, Store
+from .store import CHECKSUM, INITIAL_CHECKSUM, V2_CHECKSUM, V3_CHECKSUM, SCHEMA_VERSION, Store
 
 PURGE_SCOPE = ("Logical deletion from the live Kiokuko database only. Minimal tombstones, "
                "retry receipts and non-content metadata remain. Hermes history, existing "
@@ -40,6 +40,8 @@ def purge(service, entry_id, review_digest):
             raise KiokukoError("APPROVAL_CHANGED")
         db.execute("UPDATE jobs SET state='blocked',lease_id=NULL,lease_expires_at=NULL WHERE entry_id=? OR candidate_id IN (SELECT id FROM memory_candidates WHERE target_entry_id=? OR promoted_entry_id=?)", (entry_id, entry_id, entry_id))
         db.execute("UPDATE experience_jobs SET state='blocked',error_code='EXPERIENCE_PURGED' WHERE run_id IN (SELECT run_id FROM experience_sources WHERE entry_id=?)", (entry_id,))
+        from .learning import purge_dependents
+        purge_dependents(service,db,entry_id)
         service._invalidate(db, entry_id, entry["current_revision"], "purged")
         # Clear body-dependent digests before the ownership cascade removes the join rows.
         db.execute("UPDATE retrieval_deliveries SET rendered_sha256=NULL WHERE id IN (SELECT delivery_id FROM retrieval_delivery_entries WHERE entry_id=?)", (entry_id,))
@@ -145,7 +147,7 @@ def restore(home: Path, source: Path):
         data = (source / "kiokuko.db").read_bytes()
     except (OSError, ValueError):
         raise KiokukoError("INVALID_BACKUP") from None
-    if (manifest.get("schema"), manifest.get("checksum")) not in {(1, INITIAL_CHECKSUM), (2, V2_CHECKSUM), (SCHEMA_VERSION, CHECKSUM)} or \
+    if (manifest.get("schema"), manifest.get("checksum")) not in {(1, INITIAL_CHECKSUM), (2, V2_CHECKSUM), (3, V3_CHECKSUM), (SCHEMA_VERSION, CHECKSUM)} or \
             manifest.get("key_sha256") != hashlib.sha256(key).hexdigest() or \
             manifest.get("db_sha256") != hashlib.sha256(data).hexdigest():
         raise KiokukoError("INVALID_BACKUP")
@@ -167,6 +169,9 @@ def restore(home: Path, source: Path):
                     if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or db.execute("PRAGMA foreign_key_check").fetchone():
                         raise KiokukoError("INVALID_BACKUP")
                     db.execute("UPDATE jobs SET state='blocked',lease_id=NULL,lease_expires_at=NULL WHERE state='leased'")
+                    db.execute("UPDATE learning_jobs SET state='pending',lease_token=NULL WHERE state='running'")
+                    db.execute("UPDATE experience_jobs SET state='pending' WHERE state='running'")
+                    db.execute('DELETE FROM experience_leases')
                     db.execute("UPDATE store_metadata SET value=? WHERE key='db_id'", (secrets.token_hex(24),))
                     # Guard expects the old identity until this deliberate replacement completes.
                     del candidate.db_id

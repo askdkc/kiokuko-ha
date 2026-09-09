@@ -11,6 +11,9 @@ def make_v1(service):
     home = service.store.home
     service.store.close()
     with sqlite3.connect(service.store.path) as db:
+        for table in ('lesson_sources', 'lessons', 'lesson_families', 'learning_receipts', 'learning_jobs', 'experience_relations', 'experience_features', 'experience_leases', 'experience_windows', 'experience_coverage'):
+            db.execute("DROP TABLE " + table)
+        db.execute("DELETE FROM schema_migrations WHERE version=4")
         for table in ("experience_sources", "experience_receipts", "experiences", "experience_jobs", "monitor_runs", "verified_facts", "snapshot_roots", "fact_receipts", "compaction_receipts"):
             db.execute(f"DROP TABLE {table}")
         db.execute("DELETE FROM schema_migrations WHERE version>=2")
@@ -29,7 +32,7 @@ def test_v1_upgrade_preserves_memory_and_key(service, make_turn):
         assert upgraded.key == key
         with upgraded.transaction() as db:
             assert db.execute("SELECT claim FROM memory_entries WHERE id=?", (entry["entry_id"],)).fetchone()[0] == "keep this memory"
-            assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+            assert db.execute("PRAGMA user_version").fetchone()[0] == 4
             assert not db.execute("PRAGMA foreign_key_check").fetchall()
     finally:
         upgraded.close()

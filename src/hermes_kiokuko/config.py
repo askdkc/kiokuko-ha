@@ -7,6 +7,7 @@ from .filesystem import atomic_write, file_lock, private_directory
 DEFAULTS = {
     "schema_version": 1,
     "monitor": {"enabled": False},
+    "experience_learning": {"mode": "off"},
     "verified_compaction": {"enabled": True},
     "write_policy": "explicit_verbatim_or_human_approval_or_file_verification",
     "context_injection": {"enabled": True, "source": "pre_llm_call", "max_entries": 8,
@@ -72,7 +73,7 @@ def load_config(home: Path) -> dict:
             cfg[key].update(value)
         else:
             cfg[key] = value
-    adjustable = {("monitor", "enabled"), ("context_injection", "enabled"), ("context_injection", "max_entries"),
+    adjustable = {("experience_learning", "mode"),("monitor", "enabled"), ("context_injection", "enabled"), ("context_injection", "max_entries"),
                   ("verified_compaction", "enabled"),
                   ("context_injection", "max_chars"), ("context_injection", "min_authority"),
                   ("context_injection", "min_confidence"), ("explicit_commands", "enabled"),
@@ -87,6 +88,8 @@ def load_config(home: Path) -> dict:
                 actual = cfg[key][name]
                 if type(actual) is not type(expected) or ((key, name) not in adjustable and actual != expected):
                     raise KiokukoError("UNSUPPORTED_CONFIG")
+    if cfg["experience_learning"]["mode"] not in {"off", "shadow", "auto"}:
+        raise KiokukoError("INVALID_CONFIG")
     inject = cfg["context_injection"]
     if not (1 <= inject["max_entries"] <= 8 and 700 <= inject["max_chars"] <= 2200
             and 70 <= inject["min_authority"] <= 100 and .8 <= inject["min_confidence"] <= 1):
