@@ -1,10 +1,18 @@
 # API monitoring and experience memory
 
-The optional monitor records Hermes **middleware requests and responses** with the pinned OrcaReplay writer. It supports the normal OpenAI-compatible Chat Completions loop in CLI and Gateway. It does not intercept HTTP, record individual SSE chunks or SDK-internal retries, or provide exact replay. Hermes core, provider routing, and credentials are unchanged.
+The optional monitor records Hermes **middleware requests and responses** with the pinned OrcaReplay writer. It supports OpenAI-compatible Chat Completions and Hermes' `codex_responses` loop, including `openai-codex`, in CLI and Gateway. It does not intercept HTTP, record individual SSE chunks or SDK-internal retries, or provide exact replay. Hermes core, provider routing, and credentials are unchanged.
 
 ## Enable
 
-Install Node.js 22.12 or later separately, then run in the intended Hermes profile:
+Install Node.js 22.12 or later separately, then use the interactive Hermes CLI in the intended profile:
+
+```text
+/kiokuko-monitor enable
+/kiokuko-monitor status
+/kiokuko-monitor disable
+```
+
+With no arguments, the command shows status. Terminal commands also remain available:
 
 ```sh
 hermes kiokuko monitor enable
@@ -16,7 +24,9 @@ The package contains the writer bundle and a matching upstream Python reader. En
 
 Every completed, authenticated turn schedules asynchronous extraction, including ordinary conversation. The model may return no experience. **These are additional model calls**, separate from the main conversation and existing compaction. Long input is divided at event/text boundaries; the extraction job has a bounded deadline. Failed/oversized/missing captures are visible and are not silently treated as complete.
 
-Extraction uses the configured `auxiliary.compression` provider/model, inheriting a concrete main `model.provider`/`model.model` when omitted or `auto`. It requires one resolved OpenAI-compatible route. With no concrete configured route it reports `EXPERIENCE_MODEL_UNCONFIGURED`; it does not search other providers or use the auxiliary client's fallback ladder. A non-OpenAI client reports `EXPERIENCE_ROUTE_UNSUPPORTED`. Configure a supported compression route using Hermes settings; credentials remain in Hermes. No model or API key is bundled.
+Extraction uses the configured `auxiliary.compression` provider/model, inheriting a concrete main `model.provider`/`model.default` (`model.model` is also accepted) when omitted or `auto`. It supports OpenAI clients and Hermes' Codex Responses adapter. Codex uses Hermes' configured OAuth credentials, request conversion and stream assembly; it requires an explicitly completed response, including when terminal output is null. With no concrete configured route it reports `EXPERIENCE_MODEL_UNCONFIGURED`; other client types report `EXPERIENCE_ROUTE_UNSUPPORTED`. There is no provider fallback or SDK retry. No model or API key is bundled.
+
+For `openai-codex`, leave Hermes' API mode selection intact: an unset `model.api_mode` selects Responses. Do not force Chat Completions to enable monitoring. Unsupported capture modes retain their cause in the completed incomplete run's `error_code` and persist a status count once per such run. Old incomplete traces cannot be reconstructed by `retry`; verify new turns after installing the fix and restarting Hermes.
 
 ## What is stored
 

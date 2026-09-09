@@ -32,6 +32,7 @@ class Capture:
     dropped: int = 0
     observation: int = 0
     api_requests: int = 0
+    error_code: str | None = None
     closed: bool = False
     aborted: bool = False
     causes: dict = field(default_factory=dict)
@@ -152,6 +153,7 @@ class Monitor:
             capture = self.captures.get(snap.key)
             if capture:
                 capture.dropped += 1
+                capture.error_code = capture.error_code or code
         runtime.record_status(code)
 
     def complete(self, snap):
@@ -245,8 +247,12 @@ class Monitor:
             ack = self.process.call('close', capture.run_id)
             with self.service.transaction(None if operation == 'abort' else snap, write=True) as db:
                 state = 'incomplete' if capture.dropped or not capture.api_requests else 'complete'
-                db.execute("UPDATE monitor_runs SET state=?,events_hash=?,completed_at=?,bytes=?,dropped=? WHERE id=? AND state='recording'",
-                    (state, ack['integrity']['events_sha256'], now(), trace_size(run_path(self.service.store.directory, capture.run_id)), capture.dropped, capture.run_id))
+                code = (capture.error_code or 'MONITOR_CAPTURE_MISSING') if state == 'incomplete' else None
+                db.execute("UPDATE monitor_runs SET state=?,events_hash=?,completed_at=?,bytes=?,dropped=?,error_code=? WHERE id=? AND state='recording'",
+                    (state, ack['integrity']['events_sha256'], now(), trace_size(run_path(self.service.store.directory, capture.run_id)), capture.dropped, code, capture.run_id))
+                if code:
+                    # Persist once per incomplete run on the writer, never block the API thread.
+                    db.execute("INSERT INTO status_events VALUES (?,1,?) ON CONFLICT(code) DO UPDATE SET count=count+1,updated_at=excluded.updated_at", (code, now()))
                 row = db.execute('SELECT state FROM monitor_runs WHERE id=?', (capture.run_id,)).fetchone()
                 if row and row[0] == 'complete':
                     db.execute('INSERT OR IGNORE INTO experience_jobs VALUES (?,?,NULL,0,?)', (capture.run_id, 'pending', now()))

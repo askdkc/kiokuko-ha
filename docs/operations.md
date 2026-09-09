@@ -20,6 +20,43 @@ plugins:
 
 `hermes memory setup`からは通常記憶の自動注入とpassive候補作成を切り替えられます。通常記憶の注入を止めても、既出記憶の訂正通知は維持します。
 
+## TURN_CONTEXT_UNAVAILABLEの調査
+
+`kiokuko_propose`等のツールは、`pre_llm_call`で保存したprofile/session/turnのsnapshotを検証します。snapshotがない場合は`TURN_CONTEXT_UNAVAILABLE`で拒否します。hookの未実行・timeout・先行エラーや、hookとtoolのID不一致が候補です。このエラーだけでは原因を一つに絞れません。別ターンのsnapshotを流用したり、本人確認を省略して保存したりはしません。
+
+稼働Gatewayと同じPythonとprofileを指定して確認します。次の例は`main`用です。
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+"$HERMES_PY" -c 'from importlib.metadata import version; import hermes_cli; print("hermes-kiokuko:", version("hermes-kiokuko")); print("Hermes:", hermes_cli.__version__)'
+"$HERMES_PY" -m hermes_kiokuko doctor
+"$HERMES_PY" -m hermes_kiokuko status
+```
+
+`status`の`sync_skips_and_errors`と発生時刻を照合します。`doctor`の成功は設定・host契約・DB整合性の確認であり、稼働Gatewayでhookが実行された証明ではありません。また、端末で調べたインストール済みversionと、再起動前のGatewayにロード済みのversionが異なる場合があります。
+
+診断ログは`Kiokuko pre_llm_call failed: stage=… code=…`で最初の失敗段階を、`Kiokuko tool context rejected: tool=… code=…`で後続の拒否を示します。本文・外部ID・生の例外メッセージは記録しません。旧版にはこれらのログがなく、host側でhookをskipした場合も前者は出ません。`status`はcodeごとの累積値で、同一turnの因果関係を保証しません。DBへの診断書き込み自体が失敗する場合もあるため、statusが空でも正常とは限りません。
+
+`FileNotFoundError: 'kiokuko'`は、Hermesに設定された別のMCPコマンドの起動失敗です。本パッケージはそのコマンドを提供せず、メモリ保存にも使いません。`mcp_servers.kiokuko`が別製品用の設定か、不要になった設定かを管理者が確認してください。`setup`は無関係なMCP設定を自動削除しません。Orcaの`bridge.mjs`が存在しても、ターンsnapshotの作成成功を意味しません。
+
+### Gatewayでエージェントを再利用すると失敗する場合
+
+固定Hermes `13e72fb205b735df679e0fd5f5996a34ac4accc6`では、`GatewayRunner._set_session_env()`が受信ごとにセッションIDのContextVarを空にします。再利用ターンでもnative hookとmiddlewareには正しい`agent.session_id`が渡されるため、Kiokuko側でその情報を使います。Hermes本体へのパッチは不要です。
+
+この対応は、IDが明示的に空で、Gatewayの現在のplatform・session key・chat ID・送信者・chat typeが揃う場合に限ります。空でないIDやprofileの不一致は拒否します。モデルのtool引数やprocess環境変数からIDを補わず、HermesのContextVarも変更しません。snapshotの会話・本人・世代検証と、tool/監視実行直前の再検証は継続します。
+
+修正版パッケージのインストール後、担当Gatewayを再起動して連続ターンを確認します。`main`の例です。
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+"$HERMES_PY" -m hermes_cli.main --profile main gateway restart
+"$HERMES_PY" -m hermes_kiokuko status
+```
+
+同じPhoton会話で通常メッセージを連続して送り、候補保存とstatusを確認します。エラーcountは累積なのでゼロに戻る必要はなく、`SESSION_IDENTITY_MISMATCH`のcount・時刻が増えないかを見ます。既存DBやsession bindingを削除・書き換える修復ではありません。既にHermes側でIDが渡される環境では、そのIDを従来どおり検証します。
+
 ## Scope
 
 - DMと通常CLIは本人用scopeと現在の会話・workspaceだけを参照します。

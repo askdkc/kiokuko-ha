@@ -132,3 +132,48 @@ def test_version_and_native_gate_cover_tools_and_provider(host, monkeypatch):
     with pytest.raises(KiokukoError, match="NATIVE_MEMORY_CONFIG"):
         check_host(home)
     assert not KiokukoMemoryProvider().is_available()
+
+
+@pytest.mark.parametrize("failure,code", [
+    ("identity", "PLATFORM_IDENTITY_MISMATCH"),
+    ("storage", "STORE_UNAVAILABLE"),
+    ("unexpected", "INTERNAL_ERROR"),
+])
+def test_missing_turn_logs_original_hook_failure_and_blocks_tool(host, monkeypatch, caplog, failure, code):
+    import json
+    home, manager = host
+    from hermes_kiokuko import runtime, turn_hook
+    from hermes_kiokuko.errors import KiokukoError
+    from hermes_kiokuko.provider import KiokukoMemoryProvider
+    from hermes_cli.middleware import run_tool_execution_middleware
+
+    provider = KiokukoMemoryProvider()
+    provider.initialize("session", hermes_home=str(home))
+    private = "private user content and /private/identity/path"
+
+    def broken_identity(*args, **kwargs):
+        if failure == "identity":
+            raise KiokukoError(code)
+        if failure == "storage":
+            raise OSError(private)
+        raise RuntimeError(private)
+
+    monkeypatch.setattr(turn_hook, "resolve_identity", broken_identity)
+    result = manager.invoke_hook("pre_llm_call", session_id="session", turn_id="turn",
+                                 task_id="task", user_message=private, platform="photon")
+    assert result == [{"context": "KIOKUKO STATUS: " + code + ". Memory context unavailable."}]
+    dispatched = []
+    result = run_tool_execution_middleware("kiokuko_propose", {"claim": private},
+              lambda args: dispatched.append(args), session_id="session", turn_id="turn", task_id="task")
+    assert json.loads(result) == {"ok": False, "error": "TURN_CONTEXT_UNAVAILABLE"}
+    assert dispatched == []
+    assert f"pre_llm_call failed: stage=identity code={code}" in caplog.text
+    assert "tool context rejected: tool=kiokuko_propose code=TURN_CONTEXT_UNAVAILABLE" in caplog.text
+    assert private not in caplog.text
+    with runtime.current().transaction() as db:
+        assert db.execute("SELECT count(*) FROM turn_snapshots").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM memory_candidates").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM memory_entries").fetchone()[0] == 0
+        statuses = dict(db.execute("SELECT code,count FROM status_events"))
+        assert statuses[code] == 1
+        assert statuses["TURN_CONTEXT_UNAVAILABLE"] == 1

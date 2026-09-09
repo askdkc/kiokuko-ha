@@ -173,6 +173,50 @@ def test_acknowledged_completion_and_async_extraction(enabled,make_turn,monkeypa
         manager.close()
 
 
+def test_responses_evidence_excludes_history_reasoning_and_function_arguments():
+    def event(kind, actor='model'):
+        return SimpleNamespace(type=kind, actor=actor, seq=1, attrs={})
+    result = evidence_events([
+        (event('model.request', 'agent'), {'instructions': 'PRIVATE_SYSTEM', 'input': 'OLD_HISTORY'}),
+        (event('model.response'), {'output': [
+            {'type': 'reasoning', 'summary': [{'type': 'summary_text', 'text': 'PRIVATE_REASONING'}]},
+            {'type': 'function_call', 'arguments': 'PRIVATE_ARGUMENTS'},
+            {'type': 'message', 'role': 'user', 'content': [{'type': 'output_text', 'text': 'REPLAYED_USER'}]},
+            {'type': 'message', 'role': 'assistant', 'content': [
+                {'type': 'output_text', 'text': 'Visible assistant response'},
+                {'type': 'refusal', 'refusal': 'REFUSAL_METADATA'},
+            ]},
+        ]}),
+    ])
+    assert [row['text'] for row in result] == ['Visible assistant response']
+
+
+def test_unsupported_api_preserves_execution_and_persists_reason(enabled, make_turn, monkeypatch):
+    from hermes_kiokuko.monitor_capture import llm_execution_middleware
+    manager = Monitor(enabled)
+    snap = make_turn()
+    monkeypatch.setattr('hermes_kiokuko.monitor_capture.current_binding', lambda *a: (manager, snap))
+    calls = []
+    response = object()
+    try:
+        manager.begin(snap, {'text': 'user input'})
+        result = llm_execution_middleware(request={}, api_mode='unsupported-api',
+            next_call=lambda request: (calls.append(request), response)[1])
+        assert result is response and calls == [{}]
+        with enabled.transaction(snap, write=True) as db:
+            db.execute('INSERT INTO turn_syncs VALUES (?,?,?,?)', (*snap.key, now()))
+        manager.complete(snap)
+        assert manager.wait_idle()
+        with enabled.transaction() as db:
+            row = dict(db.execute('SELECT * FROM monitor_runs').fetchone())
+            assert (row['state'], row['api_requests'], row['dropped'], row['error_code']) == (
+                'incomplete', 0, 1, 'MONITOR_API_UNSUPPORTED')
+            assert db.execute("SELECT count FROM status_events WHERE code='MONITOR_API_UNSUPPORTED'").fetchone()[0] == 1
+            assert db.execute('SELECT count(*) FROM experience_jobs').fetchone()[0] == 0
+    finally:
+        manager.close()
+
+
 def test_middleware_never_repeats_or_changes_execution(monkeypatch):
     from hermes_kiokuko.monitor_capture import llm_execution_middleware
     monkeypatch.setattr('hermes_kiokuko.monitor_capture.current_binding',lambda *a: (_ for _ in ()).throw(RuntimeError()))

@@ -1,5 +1,6 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
+import logging
 
 from . import runtime
 from .errors import KiokukoError, public_error
@@ -7,6 +8,7 @@ from .identity import resolve_identity
 
 TOOL_NAMES = frozenset({"kiokuko_recall", "kiokuko_propose", "kiokuko_manage"})
 _verified = ContextVar("kiokuko_verified_tool_context", default=None)
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -19,16 +21,20 @@ class VerifiedContext:
 def tool_execution_middleware(*, tool_name, args, next_call, session_id="", turn_id="", task_id="", **kwargs):
     if tool_name not in TOOL_NAMES:
         return next_call(args)
+    service = None
     try:
         service = runtime.current()
         snap = service.get_snapshot(session_id, turn_id)
-        live = resolve_identity(service.store, session_id, snap.platform, workspace=False)
+        live = resolve_identity(service.store, session_id, snap.platform, workspace=False, host_session=True)
         if snap.task_id != task_id or any(getattr(snap, key) != getattr(live, key) for key in
                 ("platform", "origin", "principal_id", "conversation_id", "chat_type")):
             raise KiokukoError("TOOL_CONTEXT_MISMATCH")
         context = VerifiedContext(service, snap, tool_name)
     except Exception as error:
         # Returning an error is essential: the host resumes after a middleware exception.
+        code = error.code if isinstance(error, KiokukoError) else "INTERNAL_ERROR"
+        runtime.record_status(code, service)
+        logger.warning("Kiokuko tool context rejected: tool=%s code=%s", tool_name, code)
         return public_error(error)
     token = _verified.set(context)
     try:
