@@ -29,7 +29,7 @@ def bound_values() -> dict[str, str]:
     return result
 
 
-def resolve_identity(store, session_id: str, platform: str, *, workspace=True) -> Identity:
+def resolve_identity(store, session_id: str, platform: str, *, workspace=True, host_session=False) -> Identity:
     from agent.delegation_context import is_delegated_child_context
     from agent.runtime_cwd import resolve_agent_cwd
     from tools.skill_provenance import get_current_write_origin
@@ -42,6 +42,19 @@ def resolve_identity(store, session_id: str, platform: str, *, workspace=True) -
     if platform and bound.get("PLATFORM") and platform != bound["PLATFORM"]:
         raise KiokukoError("PLATFORM_IDENTITY_MISMATCH")
     actual_platform = bound.get("PLATFORM") or platform
+    # Hermes 0.21 Gateway clears ID on every inbound message but omits its
+    # replacement for cached agents. Native hook/middleware metadata still carries
+    # agent.session_id. Only those callers may pair it with a complete, task-local
+    # Gateway sender envelope. Never use model arguments, os.environ, or a prior
+    # turn's context to fill missing identity, and never override a nonempty ID.
+    gateway_callback = (
+        host_session and bound.get("ID") == ""
+        and isinstance(session_id, str) and 0 < len(session_id) <= 256
+        and bool(platform) and platform != "cli" and bound.get("PLATFORM") == platform
+        and bool(bound.get("KEY")) and bool(bound.get("CHAT_ID"))
+        and bool(bound.get("USER_ID_ALT") or bound.get("USER_ID"))
+        and bound.get("CHAT_TYPE") in {"private", "dm", "direct", "group", "supergroup", "channel", "guild"}
+    )
     principal = None
     conversation = None
     chat_type = bound.get("CHAT_TYPE", "")
@@ -50,7 +63,7 @@ def resolve_identity(store, session_id: str, platform: str, *, workspace=True) -
     else:
         origin = "unknown"
         # A platform argument alone cannot authenticate a sender.
-        if bound.get("PLATFORM") and bound.get("ID") == session_id:
+        if bound.get("PLATFORM") and (bound.get("ID") == session_id or gateway_callback):
             kind = "user_id_alt" if bound.get("USER_ID_ALT") else "user_id"
             user = bound.get("USER_ID_ALT") or bound.get("USER_ID")
             if user:

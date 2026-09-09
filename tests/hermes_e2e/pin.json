@@ -3,6 +3,9 @@
   "commit": "13e72fb205b735df679e0fd5f5996a34ac4accc6",
   "archive_sha256": "7d4249e5dec3816772e6c865f2797d346bd4b83dd76af6e111a54ebc04c6ad72",
   "files": {
+    "gateway/run.py": "0ac228aa6f766474013565e24aa65d87cea992f5e665e4de2bb5782e5fd3848e",
+    "gateway/session.py": "2ec8b65ff55e7c25fa801b14e4f9e21fb95d79fb354bada7f2a6ac278f5be0ca",
+    "agent/agent_init.py": "ff051678e80721ad4e053f83b66b220fbffaeef28c441fdbd8c9a7e81bdd1a8b",
     "agent/auxiliary_client.py": "856c39b1cecd1d7a5d38ff1c39cdd439eadadf485dcaea1fc61d8d52626ea0ac",
     "agent/conversation_compression.py": "b4641046c1975411a2c1b74b8126390f9692f6cc1748b8ea28e077f9eaa19967",
     "agent/turn_context.py": "b4c2891c330e85fb04de743234fa03856d5cfd1490d679f6f082eeed39f1b136",
@@ -23,6 +26,10 @@
     "agent/turn_api_call.py": "5dead01b498131df2ee987e431ded73ca21313ef1a52633e9aa802efc2aa00b5",
     "agent/turn_api_request.py": "7d5819b254019d07d13081df4bb3ff97ba9207342d11b09dd403696344acedac",
     "agent/turn_response_intake.py": "d7db0a4a5151047a01da17f8b7b7385f70839a8633645a01118685f0466838ee",
-    "agent/chat_completion_helpers.py": "57e15e7c3033fc5daf655392e59dd1c18889bedf1526c85a64b54468ddc3a827"
+    "agent/chat_completion_helpers.py": "57e15e7c3033fc5daf655392e59dd1c18889bedf1526c85a64b54468ddc3a827",
+    "agent/codex_runtime.py": "16554a7dca13dce49b552196083a9e788f0da18ffd4bbe67f7720c0bcf09e752",
+    "agent/codex_responses_adapter.py": "7ff51089d085c27e3b556c94ef0d02c7648e42e94105ee1999006daf477f3816",
+    "agent/model_metadata.py": "2c6d003151fcf215d86e12b46c7baa0dd0dcb8937377fe1cdf982ddc4984e931",
+    "agent/transports/codex.py": "56b0251fcdfbfc4b4c175175bb9e81c50a263ed6b3fba63ef450a44c790aa7e9"
   }
 }

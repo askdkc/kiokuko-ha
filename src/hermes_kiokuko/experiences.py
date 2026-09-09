@@ -43,6 +43,9 @@ def evidence_events(events):
                 if choices:
                     message = choices[0].get('message', {})
                     text = message.get('content') or ''
+                else:
+                    from .responses import assistant_text
+                    text = assistant_text(value)
         elif event.type in {'tool.call', 'tool.result', 'error'}:
             text = value if isinstance(value, str) else canonical(value)
         else:
@@ -71,23 +74,29 @@ def extract_model(home, events):
     provider = task.get('provider')
     if not provider or provider == 'auto':
         provider = main.get('provider')
-    model = task.get('model') or main.get('model')
+    model = task.get('model') or main.get('default') or main.get('model')
     if not provider or provider == 'auto' or not model:
         raise KiokukoError('EXPERIENCE_MODEL_UNCONFIGURED')
     from .compatibility import active_home
     if active_home().resolve() != home.resolve():
         raise KiokukoError('PROFILE_IDENTITY_MISMATCH')
-    from agent.auxiliary_client import resolve_provider_client
+    from agent.auxiliary_client import CodexAuxiliaryClient, resolve_provider_client
+    api_mode = task.get('api_mode')
+    if not task.get('provider') or task.get('provider') == 'auto':
+        api_mode = api_mode or main.get('api_mode')
     client, resolved = resolve_provider_client(provider, model=model,
         explicit_base_url=task.get('base_url') or main.get('base_url'),
-        explicit_api_key=task.get('api_key'), api_mode='chat_completions', task='compression')
+        explicit_api_key=task.get('api_key'), api_mode=api_mode, task='compression')
     from openai import OpenAI
-    if not isinstance(client, OpenAI) or resolved != model:
+    if not isinstance(client, (OpenAI, CodexAuxiliaryClient)) or resolved != model:
         raise KiokukoError('EXPERIENCE_ROUTE_UNSUPPORTED')
-    response = client.with_options(timeout=10, max_retries=0).chat.completions.create(
-        model=model, messages=[{'role': 'system', 'content': PROMPT},
+    kwargs = dict(model=model, messages=[{'role': 'system', 'content': PROMPT},
                                {'role': 'user', 'content': canonical(events)}],
         max_tokens=2048, **({'extra_body': task['extra_body']} if task.get('extra_body') else {}))
+    if isinstance(client, CodexAuxiliaryClient):
+        from .responses import extract_response
+        return json.loads(extract_response(client, model, kwargs))
+    response = client.with_options(timeout=10, max_retries=0).chat.completions.create(**kwargs)
     if response.choices[0].finish_reason != 'stop':
         raise KiokukoError('EXPERIENCE_INCOMPLETE')
     return json.loads(response.choices[0].message.content)

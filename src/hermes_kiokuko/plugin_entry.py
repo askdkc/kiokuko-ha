@@ -30,3 +30,7 @@ def register(ctx):
     ctx.register_command("kiokuko-update", SlashUpdate(ctx),
                          description="現在のHermes用Python環境のKiokukoを更新（対話CLI）",
                          args_hint="[status|retry|help]")
+    from .slash_monitor import SlashMonitor
+    ctx.register_command("kiokuko-monitor", SlashMonitor(ctx),
+                         description="記憶の監視・自動抽出の状態確認と切替（対話CLI）",
+                         args_hint="[enable|disable|status]")

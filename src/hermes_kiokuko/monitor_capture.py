@@ -46,7 +46,7 @@ def current_binding(session_id, turn_id, task_id):
     if not service.config['monitor']['enabled']:
         return None
     snap = service.get_snapshot(session_id, turn_id)
-    live = resolve_identity(service.store, session_id, snap.platform, workspace=False)
+    live = resolve_identity(service.store, session_id, snap.platform, workspace=False, host_session=True)
     if snap.task_id != task_id or any(getattr(snap, k) != getattr(live, k) for k in
             ('platform', 'origin', 'principal_id', 'conversation_id', 'chat_type')):
         raise KiokukoError('MONITOR_IDENTITY_MISMATCH')
@@ -75,16 +75,18 @@ def observe(kind, request, next_call, *, session_id='', turn_id='', task_id='',
         binding = current_binding(session_id, turn_id, task_id)
         if binding:
             manager, snap = binding
-            if kind == 'model' and api_mode not in {'chat_completions', 'chat_completion', ''}:
+            if kind == 'model' and api_mode not in {'chat_completions', 'chat_completion', 'codex_responses', ''}:
                 raise KiokukoError('MONITOR_API_UNSUPPORTED')
             observation = manager.next_observation(snap)
             attrs = {'observation': observation, 'request_id': str(api_request_id)[:256],
-                     'model': str(model)[:256], 'provider': str(provider)[:128], 'tool': tool_name}
+                     'model': str(model)[:256], 'provider': str(provider)[:128],
+                     'api_mode': str(api_mode)[:64], 'tool': tool_name}
             manager.append(snap, kind + ('.request' if kind == 'model' else '.call'),
                            'agent', payload(request), attrs)
-    except Exception:
+    except Exception as error:
         if binding:
-            binding[0].drop(binding[1], 'MONITOR_CAPTURE_MISSING')
+            code = error.code if isinstance(error, KiokukoError) else 'MONITOR_CAPTURE_MISSING'
+            binding[0].drop(binding[1], code)
         else:
             runtime.record_status('MONITOR_CAPTURE_MISSING')
     started = time.monotonic()

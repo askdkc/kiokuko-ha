@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 
-def test_entrypoints_hook_worker_middleware_and_manager_sync(host):
+@pytest.mark.parametrize("platform", ["cli", "photon"])
+def test_entrypoints_hook_worker_middleware_and_manager_sync(host, platform):
     home, manager = host
     from agent.turn_context import _collect_pre_llm_call_context, compose_user_api_content
     from agent.memory_manager import MemoryManager
@@ -22,6 +23,11 @@ def test_entrypoints_hook_worker_middleware_and_manager_sync(host):
     provider = load_memory_provider("kiokuko")
     assert provider is not None and provider.is_available()
     provider.initialize("session", hermes_home=str(home))
+    if platform != "cli":
+        from gateway import session_context
+        from hermes_cli.profiles import get_active_profile_name
+        session_context.set_session_vars(platform=platform, chat_id="chat", chat_type="private",
+                                        user_id="sender", session_id="session", profile=get_active_profile_name())
     seen = []
     worker_only = contextvars.ContextVar("test_worker_only", default=False)
     original = manager._hooks["pre_llm_call"][0]
@@ -31,7 +37,7 @@ def test_entrypoints_hook_worker_middleware_and_manager_sync(host):
         return original(**kwargs)
     manager._hooks["pre_llm_call"][0] = record
     raw = "PostgreSQLへの移行は却下した"
-    agent = SimpleNamespace(session_id="session", model="test", platform="cli")
+    agent = SimpleNamespace(session_id="session", model="test", platform=platform)
     context = _collect_pre_llm_call_context(agent, effective_task_id="task", turn_id="turn", original_user_message=raw,
                   messages=[{"role": "user", "content": raw}], conversation_history=[])
     assert "<!--kiokuko:v1:" in context

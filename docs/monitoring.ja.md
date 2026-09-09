@@ -1,10 +1,18 @@
 # API監視と経験記憶
 
-OrcaReplayの記録処理を使い、Hermesの**middleware境界の要求・応答**を保存します。通常のOpenAI互換Chat Completions経路のCLIとGatewayが対象です。HTTP傍受、SSEチャンクの生データ、SDK内部の再試行、完全再生は対象外です。Hermes本体やAPIの接続先は変更しません。
+OrcaReplayの記録処理を使い、Hermesの**middleware境界の要求・応答**を保存します。OpenAI互換Chat Completionsと、`openai-codex`を含むHermesの`codex_responses`経路のCLI・Gatewayが対象です。HTTP傍受、SSEチャンクの生データ、SDK内部の再試行、完全再生は対象外です。Hermes本体やAPIの接続先は変更しません。
 
 ## 有効化
 
-Node.js 22.12以降を別途用意し、対象profileで実行します。
+Node.js 22.12以降を別途用意し、対象profileのHermes対話CLIで実行します。
+
+```text
+/kiokuko-monitor enable
+/kiokuko-monitor status
+/kiokuko-monitor disable
+```
+
+引数なしは状態表示です。端末コマンドも利用できます。
 
 ```sh
 hermes kiokuko monitor enable
@@ -16,7 +24,9 @@ Node用bundleと、同じ上流commitのPython readerは配布物に含まれま
 
 **雑談を含む、認証済みの全完了ターンで追加AI呼び出しが発生します。** 有用な経験がなければ保存しません。抽出は非同期・profileごとに同時1件です。長い入力は分割しますが、抽出全体の待機上限は12秒です。時間切れや記録欠落を成功扱いにしません。
 
-抽出先はHermesの`auxiliary.compression`設定です。providerが未指定・`auto`なら、明示された主モデルの`model.provider`と`model.model`を使います。具体的な経路が決まらなければ`EXPERIENCE_MODEL_UNCONFIGURED`、OpenAI互換clientでなければ`EXPERIENCE_ROUTE_UNSUPPORTED`になります。Hermesの設定で対応するcompression経路を指定してください。別providerへの自動fallback、モデル名の固定、APIキーの同梱はありません。
+抽出先はHermesの`auxiliary.compression`設定です。providerが未指定・`auto`なら、明示された主モデルの`model.provider`と`model.default`（`model.model`も対応）を使います。OpenAI clientとHermesのCodex Responses adapterに対応します。CodexではHermesのOAuth認証・要求変換・stream集約を使い、終了イベントのoutputがnullの場合も扱います。完了イベントのない途中切断は成功扱いしません。具体的な経路が決まらなければ`EXPERIENCE_MODEL_UNCONFIGURED`、未対応のclientなら`EXPERIENCE_ROUTE_UNSUPPORTED`になります。別providerへの自動fallback、SDK再試行、モデル名の固定、APIキーの同梱はありません。
+
+`openai-codex`では`model.api_mode`が未指定ならHermesがResponsesを選びます。監視のためにChat Completionsへ変更する必要はありません。未対応の監視方式は、不完全runの終了時に原因を`error_code`へ保存し、runごとに1回statusへ記録します。過去の不完全traceは`retry`では復元できません。修正版のインストールとHermes再起動後、新しいターンで確認してください。
 
 ## 記憶として扱う範囲
 
