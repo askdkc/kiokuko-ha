@@ -31,7 +31,7 @@ def test_concurrent_processes_initialize_one_identity(tmp_path):
     with ProcessPoolExecutor(4, mp_context=multiprocessing.get_context("spawn")) as pool:
         results = list(pool.map(_open_store_in_process, [tmp_path / "shared"] * 4))
     assert len(set(results)) == 1
-    assert results[0][2] == 4
+    assert results[0][2] == 5
 
 
 def test_late_worker_cannot_resurrect_purged_vector(service, make_turn):

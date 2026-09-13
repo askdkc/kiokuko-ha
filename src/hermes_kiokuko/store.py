@@ -24,8 +24,12 @@ MONITOR_CHECKSUM = hashlib.sha256(MONITOR_SCHEMA.encode()).hexdigest()
 V3_CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA).encode()).hexdigest()
 LEARNING_SCHEMA = files("hermes_kiokuko").joinpath("migrations/004_learning.sql").read_text()
 LEARNING_CHECKSUM = hashlib.sha256(LEARNING_SCHEMA.encode()).hexdigest()
-CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA + LEARNING_SCHEMA).encode()).hexdigest()
-SCHEMA_VERSION = 4
+V4_CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA + LEARNING_SCHEMA).encode()).hexdigest()
+PROFILE_SCHEMA = files("hermes_kiokuko").joinpath("migrations/005_task_profile_memory.sql").read_text()
+PROFILE_FTS = files("hermes_kiokuko").joinpath("migrations/task_profile_fts.sql").read_text()
+PROFILE_CHECKSUM = hashlib.sha256((PROFILE_SCHEMA + PROFILE_FTS).encode()).hexdigest()
+CHECKSUM = hashlib.sha256((SCHEMA + FTS + FACT_SCHEMA + MONITOR_SCHEMA + LEARNING_SCHEMA + PROFILE_SCHEMA + PROFILE_FTS).encode()).hexdigest()
+SCHEMA_VERSION = 5
 
 
 def execute_statements(db, script):
@@ -150,6 +154,18 @@ class Store:
                 db.execute("INSERT INTO schema_migrations VALUES (4,?,?)", (LEARNING_CHECKSUM, now()))
                 db.execute("PRAGMA user_version=4")
                 db.execute("UPDATE store_metadata SET value=? WHERE key='schema_hash'", (schema_digest(db),))
+            if db.execute("PRAGMA user_version").fetchone()[0] == 4:
+                self.guard(db, version=4)
+                if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok" or db.execute("PRAGMA foreign_key_check").fetchone():
+                    raise KiokukoError("DATABASE_INTEGRITY_FAILED")
+                execute_statements(db, PROFILE_SCHEMA)
+                enabled = db.execute("SELECT value FROM store_metadata WHERE key='fts'").fetchone()[0]
+                if enabled == "1":
+                    execute_statements(db, PROFILE_FTS)
+                db.execute("INSERT INTO store_metadata VALUES ('task_profile_fts',?)", (enabled,))
+                db.execute("INSERT INTO schema_migrations VALUES (5,?,?)", (PROFILE_CHECKSUM, now()))
+                db.execute("PRAGMA user_version=5")
+                db.execute("UPDATE store_metadata SET value=? WHERE key='schema_hash'", (schema_digest(db),))
             self.guard(db)
             db.commit()
         except sqlite3.Error:
@@ -174,7 +190,7 @@ class Store:
                 db.execute("PRAGMA user_version").fetchone()[0] != version:
             raise KiokukoError("SCHEMA_MISMATCH")
         rows = db.execute("SELECT version,checksum FROM schema_migrations").fetchall()
-        expected = [(1, INITIAL_CHECKSUM)] + ([(2, FACT_CHECKSUM)] if version >= 2 else []) + ([(3, MONITOR_CHECKSUM)] if version >= 3 else []) + ([(4, LEARNING_CHECKSUM)] if version >= 4 else [])
+        expected = [(1, INITIAL_CHECKSUM)] + ([(2, FACT_CHECKSUM)] if version >= 2 else []) + ([(3, MONITOR_CHECKSUM)] if version >= 3 else []) + ([(4, LEARNING_CHECKSUM)] if version >= 4 else []) + ([(5, PROFILE_CHECKSUM)] if version >= 5 else [])
         if sorted(tuple(row) for row in rows) != expected:
             raise KiokukoError("CHECKSUM_MISMATCH")
         meta = dict(db.execute("SELECT key,value FROM store_metadata").fetchall())

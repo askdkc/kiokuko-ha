@@ -143,6 +143,8 @@ class Service:
                 db.execute("UPDATE memory_candidates SET state='invalidated_by_rewind',resolved_at=? WHERE session_id=? AND state='pending'", (now(), session_id))
                 from .experiences import invalidate_generation
                 invalidate_generation(self, db, session_id)
+                from .task_profiles import invalidate_session
+                invalidate_session(db, session_id)
 
     def _entry(self, db, entry_id, snapshot=None, *, admin=False):
         row = db.execute("SELECT * FROM memory_entries WHERE id=?", (entry_id,)).fetchone()

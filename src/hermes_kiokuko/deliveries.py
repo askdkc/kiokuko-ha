@@ -67,15 +67,21 @@ def observe(db, observed):
                        (delivery["session_id"], invalidation["entry_id"], invalidation["invalidated_through_revision"]))
 
 
-def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=None):
+def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=None, metrics=None):
+    config = service.config
+    from .measurements import Measurements
+    timing = Measurements(metrics)
     deadline = deadline or time.monotonic() + .15
     with service.transaction(snapshot, write=True, deadline=deadline) as db:
+        timing.mark("transaction_setup")
         from .facts import expire_stale
         expire_stale(service, db, snapshot)
         for expired in db.execute("SELECT * FROM memory_entries WHERE state='active' AND epistemic_status<>'derived_lesson' AND valid_until IS NOT NULL AND valid_until<=?", (now(),)).fetchall():
             service._change(db, dict(expired), "expire_request")
+        timing.mark("fact_and_expiry_validation")
         from .learning import refresh
         refresh(service,db)
+        timing.mark("lesson_refresh")
         lineage = ancestors(db, snapshot.session_id)
         observed = verified_history(service, db, history, lineage)
         observe(db, observed)
@@ -102,23 +108,34 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
         parts = [POLICY]
         if receipt:
             parts.append("KIOKUKO OPERATION: " + canonical(receipt))
+        from .task_profiles import FENCE, needs_fence
+        profile_fence = needs_fence(db, lineage, snapshot)
+        if profile_fence:
+            parts.append(FENCE)
         corrections, entries = [], []
         for item in invalidations:
             corrections.append(f"[{item['entry_id']}@1..{item['invalidated_through_revision']}] is invalid ({item['change_kind']}).")
             row = db.execute("SELECT * FROM memory_entries WHERE id=?", (item["entry_id"],)).fetchone()
-            if row and eligible(row, snapshot, service.config, db):
+            if row and eligible(row, snapshot, config, db):
                 entries.append(dict(row))
         if corrections:
             parts.append("KIOKUKO CORRECTION:\n" + '\n'.join(corrections))
-        budget = service.config["context_injection"]["max_chars"]
+        budget = config["context_injection"]["max_chars"]
         reserve = 140
         fence = False
         if len('\n\n'.join(parts)) + reserve > budget:
             fence = True
             parts = parts[:2] if receipt else parts[:1]
             parts.append("KIOKUKO CORRECTION: All Kiokuko entries in contexts preceding this delivery are invalid. Use only entries below or request a fresh recall.")
-        if service.config["context_injection"]["enabled"]:
-            entries += search(db, snapshot, query, service.config)
+            if profile_fence:
+                parts.append(FENCE)
+        timing.mark("history_and_corrections")
+        if config["context_injection"]["enabled"]:
+            search_metrics = {} if metrics is not None else None
+            entries += search(db, snapshot, query, config, metrics=search_metrics)
+            if metrics is not None:
+                metrics["search"] = search_metrics
+        timing.mark("memory_search")
         from .learning import matches
         lesson_sources = {r[0] for e in entries if e['epistemic_status']=='derived_lesson' and matches(db,e,query)
                           for r in db.execute('SELECT source_id FROM lesson_sources WHERE entry_id=? AND entry_revision=?', (e['id'],e['current_revision']))}
@@ -143,7 +160,7 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
                 text = ("過去経験からの推論（現在の条件を確認）\n" if entry['epistemic_status']=='derived_lesson' else "未検証の過去事例（要約と推論は未確認）\n") + text
                 if experience_count >= 2 or experience_chars + len(text) > 800:
                     continue
-            if len('\n\n'.join(parts + [text])) + reserve > budget or len(selected) >= service.config["context_injection"]["max_entries"]:
+            if len('\n\n'.join(parts + [text])) + reserve > budget or len(selected) >= config["context_injection"]["max_entries"]:
                 continue
             if is_experience:
                 experience_count += 1
@@ -151,6 +168,17 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
             parts.append(text)
             emitted.add(key)
             selected.append(entry)
+        timing.mark("memory_render")
+        from .profile_probe import resolve, render
+        hint, profile_refs = '', []
+        if config['task_profile_memory']['mode'] != 'off':
+            resolution = resolve(service, db, snapshot, query, deadline=deadline, config=config)
+            hint, profile_refs = render(service, db, snapshot, resolution, deadline=deadline, config=config)
+        if hint and len('\n\n'.join(parts + [hint])) + reserve <= budget:
+            parts.append(hint)
+        else:
+            profile_refs = []
+        timing.mark('profile_probe_and_render')
         body = '\n\n'.join(parts)
         body_hash = digest(body)
         old = db.execute("SELECT * FROM retrieval_deliveries WHERE profile_key=? AND session_id=? AND turn_id=? AND rendered_sha256=? ORDER BY created_at DESC LIMIT 1", (*snapshot.key, body_hash)).fetchone()
@@ -168,12 +196,17 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
             for invalidation in invalidations:
                 insert(db, "retrieval_delivery_invalidations", {"delivery_id": delivery_id, "entry_id": invalidation["entry_id"],
                        "invalidated_through_revision": invalidation["invalidated_through_revision"]})
+        for profile_id in profile_refs:
+            db.execute('INSERT OR IGNORE INTO task_profile_deliveries VALUES (?,?)', (delivery_id, profile_id))
         marker = f"<!--kiokuko:v1:{delivery_id}:{signature(service.store.key, snapshot, delivery_id, body_hash)}-->"
         result = body + '\n' + marker
         if len(result) > budget:
             raise KiokukoError("CONTEXT_BUDGET_EXCEEDED")
         db.execute("UPDATE retrieval_deliveries SET character_count=? WHERE id=?", (len(result), delivery_id))
-        return result
+        timing.mark("delivery_write")
+    timing.mark("commit_and_guard")
+    timing.finish()
+    return result
 
 
 def record_manual_read(service, snapshot, result):

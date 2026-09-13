@@ -11,7 +11,7 @@ import tempfile
 from .errors import KiokukoError
 from .filesystem import atomic_write, checked_file, file_lock, private_directory, sync_directory
 from .models import canonical, digest, now
-from .store import CHECKSUM, INITIAL_CHECKSUM, V2_CHECKSUM, V3_CHECKSUM, SCHEMA_VERSION, Store
+from .store import CHECKSUM, INITIAL_CHECKSUM, V2_CHECKSUM, V3_CHECKSUM, V4_CHECKSUM, SCHEMA_VERSION, Store
 
 PURGE_SCOPE = ("Logical deletion from the live Kiokuko database only. Minimal tombstones, "
                "retry receipts and non-content metadata remain. Hermes history, existing "
@@ -147,7 +147,7 @@ def restore(home: Path, source: Path):
         data = (source / "kiokuko.db").read_bytes()
     except (OSError, ValueError):
         raise KiokukoError("INVALID_BACKUP") from None
-    if (manifest.get("schema"), manifest.get("checksum")) not in {(1, INITIAL_CHECKSUM), (2, V2_CHECKSUM), (3, V3_CHECKSUM), (SCHEMA_VERSION, CHECKSUM)} or \
+    if (manifest.get("schema"), manifest.get("checksum")) not in {(1, INITIAL_CHECKSUM), (2, V2_CHECKSUM), (3, V3_CHECKSUM), (4, V4_CHECKSUM), (SCHEMA_VERSION, CHECKSUM)} or \
             manifest.get("key_sha256") != hashlib.sha256(key).hexdigest() or \
             manifest.get("db_sha256") != hashlib.sha256(data).hexdigest():
         raise KiokukoError("INVALID_BACKUP")

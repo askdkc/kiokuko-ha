@@ -1,3 +1,4 @@
+from test_fact_migration import drop_v5
 import json
 import sqlite3
 import threading
@@ -340,6 +341,7 @@ def test_v3_migration_and_unknown_checksum_preserve_database(service):
     home,key=service.store.home,service.store.key
     service.store.close()
     with sqlite3.connect(service.store.path) as db:
+        drop_v5(db)
         for name in names:db.execute('DROP TABLE '+name)
         db.execute('DELETE FROM schema_migrations WHERE version=4')
         db.execute('PRAGMA user_version=3')
@@ -348,7 +350,7 @@ def test_v3_migration_and_unknown_checksum_preserve_database(service):
     try:
         assert store.key==key
         with store.transaction() as db:
-            assert db.execute('PRAGMA user_version').fetchone()[0]==4
+            assert db.execute('PRAGMA user_version').fetchone()[0]==5
             assert db.execute('SELECT count(*) FROM lessons').fetchone()[0]==0
     finally:store.close()
 
@@ -406,7 +408,7 @@ def test_backup_restore_and_corrupt_v3_checksum(enabled,make_turn,tmp_path):
         db.execute("UPDATE schema_migrations SET checksum='wrong' WHERE version=3")
     with pytest.raises(KiokukoError,match='CHECKSUM_MISMATCH'):Store(home)
     with sqlite3.connect(store.path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0]==4
+        assert db.execute('PRAGMA user_version').fetchone()[0]==5
         assert db.execute('SELECT claim FROM memory_entries WHERE id=?',(entry['id'],)).fetchone()
 
 

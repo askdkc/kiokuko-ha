@@ -7,10 +7,23 @@ from hermes_kiokuko.models import ExplicitCommand
 from hermes_kiokuko.store import Store, schema_digest
 
 
+def drop_v5(db):
+    db.execute('DROP INDEX memory_recall_pinned')
+    for name in ('task_profile_document_insert', 'task_profile_document_update', 'task_profile_document_delete'):
+        db.execute('DROP TRIGGER IF EXISTS ' + name)
+    db.execute('DROP TABLE IF EXISTS task_profile_fts')
+    for name in ('task_profile_deliveries', 'task_profile_candidates', 'task_profile_resolutions',
+                 'task_profile_documents', 'task_profile_signals', 'task_profile_receipts', 'task_profiles'):
+        db.execute('DROP TABLE ' + name)
+    db.execute('DELETE FROM schema_migrations WHERE version=5')
+    db.execute("DELETE FROM store_metadata WHERE key LIKE 'task_profile_%'")
+
+
 def make_v1(service):
     home = service.store.home
     service.store.close()
     with sqlite3.connect(service.store.path) as db:
+        drop_v5(db)
         for table in ('lesson_sources', 'lessons', 'lesson_families', 'learning_receipts', 'learning_jobs', 'experience_relations', 'experience_features', 'experience_leases', 'experience_windows', 'experience_coverage'):
             db.execute("DROP TABLE " + table)
         db.execute("DELETE FROM schema_migrations WHERE version=4")
@@ -32,7 +45,7 @@ def test_v1_upgrade_preserves_memory_and_key(service, make_turn):
         assert upgraded.key == key
         with upgraded.transaction() as db:
             assert db.execute("SELECT claim FROM memory_entries WHERE id=?", (entry["entry_id"],)).fetchone()[0] == "keep this memory"
-            assert db.execute("PRAGMA user_version").fetchone()[0] == 4
+            assert db.execute("PRAGMA user_version").fetchone()[0] == 5
             assert not db.execute("PRAGMA foreign_key_check").fetchall()
     finally:
         upgraded.close()
