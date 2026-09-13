@@ -8,8 +8,8 @@ from hermes_kiokuko.config import load_config
 from hermes_kiokuko.store import Store
 
 
-@pytest.fixture
-def gateway_commands(host, monkeypatch):
+@pytest.fixture(params=["discord", "telegram", "bluebubbles"])
+def gateway_commands(host, monkeypatch, request):
     from gateway.run import GatewayRunner
     from gateway.config import Platform
     from gateway.platforms.base import MessageEvent
@@ -22,7 +22,8 @@ def gateway_commands(host, monkeypatch):
     runner.hooks = HookRegistry()
     monkeypatch.setattr(runner, "_scale_to_zero_note_real_inbound", lambda: None)
     extra = {'allow_admin_from': ['owner'], 'group_allow_admin_from': ['owner']}
-    runner.config = SimpleNamespace(platforms={Platform.DISCORD: SimpleNamespace(extra=extra)})
+    platform = Platform(request.param)
+    runner.config = SimpleNamespace(platforms={platform: SimpleNamespace(extra=extra)})
     replies, authenticated = [], []
 
     async def send(chat_id, text, **kwargs):
@@ -37,32 +38,33 @@ def gateway_commands(host, monkeypatch):
     monkeypatch.setattr(runner, '_adapter_for_source', lambda source: SimpleNamespace(send=send))
 
     def event(text, *, user='owner', chat='channel', thread='thread', chat_type='group', **kwargs):
-        return MessageEvent(text=text, message_id='message', source=SessionSource(
-            platform=Platform.DISCORD, user_id=user, chat_id=chat, thread_id=thread,
+        return MessageEvent(text=text, message_id='123', source=SessionSource(
+            platform=platform, user_id=user, chat_id=chat, thread_id=thread,
             chat_type=chat_type), **kwargs)
 
     async def dispatch(message):
         previous = len(replies)
-        admitted = await runner._hm_admit_event(message)
-        if admitted is None or message.internal or not message.allow_gateway_control:
+        if message.internal or not message.allow_gateway_control:
+            await runner._hm_admit_event(message)
             return message, []
-        event, source, _ = admitted
-        handled, text = await runner._hm_dispatch_idle_commands(
-            event, source, runner._session_key_for_source(source))
-        assert handled
+        text = await runner._handle_message(message)
+        if text is None:
+            return message, replies[previous:]
+        source = message.source
         if text is not None:
             from gateway.platforms.base import _reply_anchor_for_event
-            anchor = _reply_anchor_for_event(event)
+            anchor = _reply_anchor_for_event(message)
             await send(source.chat_id, text, reply_to=anchor,
                        metadata=runner._thread_metadata_for_source(source, anchor))
         result = None
         return result, replies[previous:]
 
     return SimpleNamespace(home=home, manager=manager, runner=runner, event=event,
-                           dispatch=dispatch, extra=extra, authenticated=authenticated, replies=replies)
+                           dispatch=dispatch, extra=extra, authenticated=authenticated,
+                           replies=replies, platform=platform.value)
 
 
-def test_discord_monitor_status_enable_disable_and_thread_reply(gateway_commands):
+def test_chat_monitor_status_enable_disable_and_thread_reply(gateway_commands):
     g = gateway_commands
 
     async def scenario():
@@ -73,7 +75,8 @@ def test_discord_monitor_status_enable_disable_and_thread_reply(gateway_commands
             chat, text, route = replies[0]
             assert ('有効' if enabled else '無効') in text
             assert '対話CLI' not in text and 'Unknown command' not in text
-            assert chat == 'channel' and route['reply_to'] == 'message'
+            expected_anchor = None if g.platform == 'telegram' else '123'
+            assert chat == 'channel' and route['reply_to'] == expected_anchor
             assert route['metadata']['thread_id'] == 'thread'
             assert load_config(g.home)['monitor']['enabled'] is enabled
     asyncio.run(scenario())
@@ -198,7 +201,10 @@ def test_concurrent_gateway_commands_keep_their_arguments_and_senders(gateway_co
 def test_gateway_update_start_and_status(gateway_commands, monkeypatch, tmp_path):
     import hermes_kiokuko.slash_update as update
     import threading
+    import tomllib
+    from pathlib import Path
     g = gateway_commands
+    release = tomllib.loads((Path(__file__).resolve().parents[2] / 'pyproject.toml').read_text())['project']['version']
     finished = threading.Event()
     calls = []
     monkeypatch.setattr(update, '_job', None)
@@ -226,6 +232,7 @@ def test_gateway_update_start_and_status(gateway_commands, monkeypatch, tmp_path
                 await asyncio.to_thread(thread.join, 5)
         _, replies = await g.dispatch(g.event('/kiokuko-update status'))
         assert '完了' in replies[0][1] and '9.9' in replies[0][1]
+        assert f'このprocessの読込時: {release}' in replies[0][1]
         assert len(calls) == 2
         argv, options = calls[0]
         assert argv[0] == update.sys.executable and argv[-1] == 'hermes-kiokuko'
