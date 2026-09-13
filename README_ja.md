@@ -114,3 +114,14 @@ HermesのCLI・GatewayからOpenAI互換APIへの要求・応答をOrcaReplayへ
 停止は`/kiokuko-monitor disable`です。
 
 全完了ターンで最大4窓の追加AI抽出を行い、有用な経験を**未検証の過去事例**として自動検索します。既存の承認済み記憶とは区別します。監視は初期状態で無効、traceは最大7日・profileあたり1 GiBです。[設定・モデル経路・記憶の境界・削除](docs/monitoring.ja.md)を確認してください。複数経験からの教訓生成・改訂・条件付き利用は別設定で、学習の既定値は**off**です。[切り替え手順と品質評価](docs/learning.md)を参照してください。
+
+## 任意の作業プロフィール記憶
+
+完了したCLI・DMの依頼に明示された対象を、追加のモデル呼び出しなしで参照できます。既定はoffです。候補を表示しない収集モードで有効化し、状態を確認します。
+
+```sh
+python -m hermes_kiokuko task-profiles mode shadow
+python -m hermes_kiokuko task-profiles status
+```
+
+[設定・各モード・上限・削除](docs/task-profiles.md)

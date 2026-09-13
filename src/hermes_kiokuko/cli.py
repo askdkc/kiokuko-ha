@@ -22,6 +22,8 @@ def setup_parser(parser):
         sub.add_parser(command)
     from .monitor_cli import setup_parser as monitor_parser
     monitor_parser(sub.add_parser("monitor"))
+    from .profile_cli import setup_parser as profile_parser
+    profile_parser(sub.add_parser('task-profiles'))
     learning = sub.add_parser('learning')
     learning.add_argument('learning_action',nargs='?',default='status',choices=['off','shadow','auto','status','retry'])
     search = sub.add_parser("search")
@@ -85,6 +87,9 @@ def execute(args, home, *, input_fn=input, output=print):
     store = Store(home, initialize=action in {"remember", "import-native-user-profile"})
     try:
         service = Service(store, host_guard=check_host, content_guard=host_scan)
+        if action == 'task-profiles':
+            from .profile_cli import execute as execute_profiles
+            return execute_profiles(service, args, input_fn=input_fn, output=output)
         if action == 'learning':
             from .learning_cli import execute as execute_learning
             return execute_learning(service,args.learning_action)
@@ -160,6 +165,9 @@ def execute(args, home, *, input_fn=input, output=print):
                 current = db.execute("SELECT workspace_id FROM workspace_aliases WHERE identity_hash=?", (identity_hash,)).fetchone()
                 if (tuple(current) if current else None) != (tuple(before) if before else None):
                     raise KiokukoError("APPROVAL_CHANGED")
+                if before is None or before[0] != args.workspace_id:
+                    from .task_profiles import invalidate_workspace_binding
+                    invalidate_workspace_binding(db, identity_hash)
                 db.execute("INSERT INTO workspace_aliases VALUES (?,?) ON CONFLICT(identity_hash) DO UPDATE SET workspace_id=excluded.workspace_id", (identity_hash, args.workspace_id))
             return {"workspace_linked": True}
         if action in {"approve", "purge-candidate"}:

@@ -43,6 +43,12 @@ class KiokukoMemoryProvider(MemoryProvider):
                 raise KiokukoError("PROVIDER_NOT_READY")
             snap = sync_completed(self._service, session_id, user_content, messages)
             if snap is not None:
+                from .task_profiles import capture_completed
+                try:
+                    capture_completed(self._service, snap, messages)
+                except Exception as error:
+                    runtime.record_status(error.code if isinstance(error, KiokukoError)
+                                          else 'TASK_PROFILE_CAPTURE_FAILED', self._service)
                 from .monitor import complete_turn
                 try:
                     complete_turn(self._service, snap)

@@ -1,8 +1,9 @@
+"""Pre-optimization reference, frozen for result and performance comparisons."""
 import re
 import unicodedata
 
-from .identity import can_read
-from .models import now
+from hermes_kiokuko.identity import can_read
+from hermes_kiokuko.models import now
 
 
 def tokens(text: str) -> set[str]:
@@ -42,7 +43,7 @@ def eligible(entry, snapshot, config, db=None):
     if not can_read(entry, snapshot) or entry["state"] != "active":
         return False
     if entry['epistemic_status'] == 'derived_lesson':
-        from .learning import usable
+        from hermes_kiokuko.learning import usable
         return db is not None and usable(db,entry,config)
     if entry["epistemic_status"] == "observed_experience":
         return bool(db is not None and config["monitor"]["enabled"] and entry["kind"] == "experience"
@@ -50,7 +51,7 @@ def eligible(entry, snapshot, config, db=None):
             and not entry["shared_by_admin"] and db.execute(
                 "SELECT 1 FROM experiences WHERE entry_id=? AND entry_revision=?",
                 (entry["id"], entry["current_revision"])).fetchone())
-    from .facts import fact_current
+    from hermes_kiokuko.facts import fact_current
     verified = fact_current(db, entry) if db is not None else None
     if verified is False or (entry["epistemic_status"] == "file_verified" and verified is not True):
         return False
@@ -59,59 +60,30 @@ def eligible(entry, snapshot, config, db=None):
         (entry["valid_until"] is None or entry["valid_until"] > now())
 
 
-def search(db, snapshot, query, config, *, conflicts=False, metrics=None):
-    from .measurements import Measurements
-    timing = Measurements(metrics)
+def search(db, snapshot, query, config, *, conflicts=False):
     scope, values = scope_sql(snapshot)
     if conflicts:
         lesson_filter = " AND epistemic_status<>'derived_lesson'" if config['experience_learning']['mode']!='auto' else ''
         return [dict(row) for row in db.execute(f"SELECT * FROM memory_entries WHERE {scope} AND state='conflicted'{lesson_filter} ORDER BY id LIMIT 64", values)]
     query_tokens = sorted(tokens(str(query)[:600]), key=lambda token: (-len(token), token))[:64]
-    # Start with indexed postings, not a materialized list of the whole scope.
-    # Scope and revision checks run before score aggregation and body hydration.
-    active = "state='active' AND (auto_inject=1 OR epistemic_status IN ('file_verified','observed_experience','derived_lesson'))"
-    params = []
+    predicate, params, prefix = "", [], ""
+    score = "0"
     if query_tokens:
-        marks = ','.join('?' for _ in query_tokens)
-        hits = ("SELECT n.entry_id,sum(length(n.token)) AS score FROM memory_ngrams n "
-                "JOIN memory_entries ON memory_entries.id=n.entry_id AND current_revision=n.entry_revision "
-                f"WHERE n.token IN ({marks}) AND {scope} AND {active} GROUP BY n.entry_id")
-        params.extend([*query_tokens, *values])
+        hit_sql = "SELECT entry_id,sum(length(token)) AS score FROM memory_ngrams WHERE token IN (" + ','.join('?' for _ in query_tokens) + ") GROUP BY entry_id"
+        params.extend(query_tokens)
         if db.execute("SELECT value FROM store_metadata WHERE key='fts'").fetchone()[0] == "1":
             fts_tokens = [t for t in query_tokens if len(t) >= 3]
             if fts_tokens:
-                hits += (" UNION ALL SELECT f.entry_id,1 AS score FROM memory_fts f "
-                         "JOIN memory_entries ON memory_entries.id=f.entry_id JOIN memory_search_documents d "
-                         "ON d.entry_id=f.entry_id AND d.entry_revision=current_revision "
-                         f"WHERE memory_fts MATCH ? AND {scope} AND {active}")
-                params.extend([' OR '.join('"' + token.replace('"', '""') + '"' for token in fts_tokens), *values])
-        prefix = ("WITH hits AS (" + hits + "), scores AS (SELECT entry_id,sum(score) AS score FROM hits GROUP BY entry_id), "
-                  "ids AS (SELECT entry_id AS id FROM scores UNION SELECT id FROM memory_entries INDEXED BY memory_recall_pinned "
-                  f"WHERE {scope} AND {active} AND pinned=1) ")
-        params.extend(values)
-        selection = ("SELECT m.id,COALESCE(s.score,0) AS lexical_score FROM ids "
-                     "JOIN memory_entries m ON m.id=ids.id LEFT JOIN scores s ON s.entry_id=m.id")
-    else:
-        prefix = ""
-        selection = f"SELECT m.id,0 AS lexical_score FROM memory_entries m WHERE {scope} AND {active}"
-        params.extend(values)
-    picked = db.execute(prefix + selection +
-                        " ORDER BY (m.epistemic_status IN ('observed_experience','derived_lesson')),m.pinned DESC,lexical_score DESC,m.authority DESC,m.id LIMIT ?",
-                        (*params, config["retrieval"]["candidate_limit"])).fetchall()
-    timing.mark('candidate_sql')
-    scores = {row['id']: row['lexical_score'] for row in picked}
-    if metrics is not None:
-        metrics['expanded_entries'] = len(scores)
-    if not scores:
-        timing.finish()
-        return []
-    marks = ','.join('?' for _ in scores)
-    rows = [dict(row, lexical_score=scores[row['id']]) for row in db.execute(
-        f"SELECT * FROM memory_entries WHERE id IN ({marks})", tuple(scores))]
-    timing.mark("hydrate")
+                hit_sql += " UNION ALL SELECT entry_id,1 AS score FROM memory_fts WHERE memory_fts MATCH ?"
+                params.append(' OR '.join('"' + token.replace('"', '""') + '"' for token in fts_tokens))
+        prefix = "WITH hits AS (" + hit_sql + ") "
+        score = "COALESCE((SELECT sum(score) FROM hits WHERE hits.entry_id=memory_entries.id),0)"
+        predicate = " AND (pinned=1 OR id IN (SELECT entry_id FROM hits))"
+    rows = db.execute(prefix + f"SELECT *,{score} AS lexical_score FROM memory_entries WHERE {scope} AND state='active' AND (auto_inject=1 OR epistemic_status IN ('file_verified','observed_experience','derived_lesson'))" + predicate +
+                      " ORDER BY (epistemic_status IN ('observed_experience','derived_lesson')),pinned DESC,lexical_score DESC,authority DESC,id LIMIT ?", (*params, *values, config["retrieval"]["candidate_limit"])).fetchall()
     candidates = [dict(row) for row in rows if eligible(row, snapshot, config, db)
                   and (row["epistemic_status"] != "observed_experience" or (query_tokens and row["lexical_score"] > 0))]
-    from .learning import matches
+    from hermes_kiokuko.learning import matches
     candidates = [e for e in candidates if e['epistemic_status'] != 'derived_lesson' or matches(db,e,query)]
     def rank(entry):
         relevance = entry["lexical_score"]
@@ -122,7 +94,4 @@ def search(db, snapshot, query, config, *, conflicts=False, metrics=None):
     # Prefer an applicable lesson over its supporting individual examples.
     lessons = [e for e in candidates if e['epistemic_status']=='derived_lesson']
     source_ids = {r[0] for e in lessons for r in db.execute('SELECT source_id FROM lesson_sources WHERE entry_id=? AND entry_revision=?', (e['id'],e['current_revision']))}
-    result = [e for e in candidates if e['id'] not in source_ids]
-    timing.mark('validate_and_rank')
-    timing.finish()
-    return result
+    return [e for e in candidates if e['id'] not in source_ids]

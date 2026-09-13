@@ -11,3 +11,4 @@ build/
 .codex/
 .release-venv312
 pip-publish.sh
+.kiokuko.json
