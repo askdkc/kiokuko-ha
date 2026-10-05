@@ -5,7 +5,7 @@ policies, hook interception and reply delivery in its normal dispatch pipeline.
 """
 import asyncio
 from contextvars import ContextVar
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from copy import deepcopy
 from pathlib import Path
 import weakref
@@ -23,6 +23,7 @@ class IncomingCommand:
     task: object
     event: object
     gateway: object
+    consumed: threading.Event = field(default_factory=threading.Event, compare=False)
 
 
 class GatewayCommands:
@@ -103,15 +104,18 @@ class GatewayCommands:
 
 
 def dispatch(ctx, command, raw_args):
-    """Consume one host event on its originating task, never an inherited child."""
+    """Capture only; the host must await the result on the originating task."""
     request = _pending.get()
     if request is None:
         return None
+    return _dispatch_bound(request, ctx, command, raw_args)
+
+
+async def _dispatch_bound(request, ctx, command, raw_args):
+    """Validate and consume shared authority once, including copied contexts."""
+    if _pending.get() is not request or request.consumed.is_set() or \
+            request.owner.ctx is not ctx or request.task() is not asyncio.current_task():
+        return 'コマンドを実行できませんでした (GATEWAY_CONTEXT_MISMATCH)。'
+    request.consumed.set()
     _pending.set(None)
-    try:
-        task = asyncio.current_task()
-    except RuntimeError:
-        return None
-    if request.owner.ctx is not ctx or request.task() is not task:
-        return None
-    return request.owner.execute(request, command, raw_args)
+    return await request.owner.execute(request, command, raw_args)

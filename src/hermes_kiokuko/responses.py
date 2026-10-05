@@ -20,7 +20,12 @@ def extract_response(client, model, kwargs, *, metrics=None):
     # Use Hermes' route-specific request conversion, OAuth client and stream assembler.
     # Do not call its auxiliary fallback/retry ladder or change the configured provider.
     from agent.auxiliary_client import _CodexCompletionsAdapter, _CodexStreamGuard, aux_stream_deadline
-    from agent.codex_runtime import _bypass_sdk_request_transform, _consume_codex_event_stream
+    from agent import codex_runtime
+    _consume_codex_event_stream = codex_runtime._consume_codex_event_stream
+    # 0.21.4 moved this helper to its shared SDK module; preserve 0.21.0.
+    bypass = getattr(codex_runtime, '_bypass_sdk_request_transform', None)
+    if bypass is None:
+        from agent.sdk_transform_bypass import bypass_sdk_request_transform as bypass
     from .monitor_capture import payload
 
     bounded = client._real_client.with_options(timeout=10, max_retries=0)
@@ -39,7 +44,7 @@ def extract_response(client, model, kwargs, *, metrics=None):
 
     try:
         guard.start()
-        stream = bounded.responses.create(**_bypass_sdk_request_transform({**request, 'stream': True}))
+        stream = bounded.responses.create(**bypass({**request, 'stream': True}))
         guard.adopt_stream(stream)
         try:
             guard.check_cancelled()

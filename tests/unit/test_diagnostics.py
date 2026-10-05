@@ -29,3 +29,22 @@ def test_failed_doctor_exits_nonzero(service, monkeypatch, capsys):
     monkeypatch.setattr('hermes_kiokuko.diagnostics.check_host', reject)
     assert main(['doctor']) == 1
     assert '"ok": false' in capsys.readouterr().out
+
+
+def test_missing_tools_entrypoint_fails_doctor_with_healthy_store(service, monkeypatch):
+    import importlib.metadata
+    original = importlib.metadata.entry_points
+    monkeypatch.setattr('hermes_kiokuko.diagnostics.check_host', lambda *_: None)
+    monkeypatch.setattr(importlib.metadata, 'entry_points',
+                        lambda *, group: [] if group == 'hermes_agent.plugins' else original(group=group))
+    info = diagnose(service.store.home)
+    assert info['database_ok'] is True
+    assert info['entrypoints_ready'] is False and info['ok'] is False
+    assert 'DIAGNOSTIC_ENTRYPOINTS_UNAVAILABLE' in info['errors']
+
+
+def test_default_doctor_does_not_load_plugins(service, monkeypatch):
+    def unexpected(*_):
+        raise AssertionError('default doctor must remain read-only')
+    monkeypatch.setattr('hermes_kiokuko.diagnostics.command_registration', unexpected)
+    assert diagnose(service.store.home)['command_registration'] == {'checked': False, 'gateway_loaded': None}

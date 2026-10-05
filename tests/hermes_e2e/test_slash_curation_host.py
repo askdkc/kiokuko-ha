@@ -91,10 +91,20 @@ def test_gateway_identity_never_gains_admin_or_reads_candidates(slash, chat_type
 def test_unbound_gateway_event_loop_denied_even_with_cli_attached(slash):
     from types import SimpleNamespace
     from gateway.run_inbound import GatewayInboundMixin
-    runner = SimpleNamespace(_draining=False, _hm_quick_commands=lambda: {})
+    from gateway.run import GatewayRunner
+    from gateway.config import GatewayConfig, Platform
+    from gateway.session import SessionSource
+    runner = object.__new__(GatewayRunner)
+    runner._draining = False
+    runner.config = GatewayConfig()
+    runner._hm_quick_commands = lambda: {}
+    source = SessionSource(platform=Platform.TELEGRAM, user_id='sender', chat_id='chat', chat_type='dm')
     event = SimpleNamespace(get_command_args=lambda: "")
     handled, result, _ = asyncio.run(GatewayInboundMixin._hm_dispatch_quick_and_plugin_commands(
-        runner, event, None, "kioku_curation"))
+        runner, event, source, "kioku_curation"))
+    executor = getattr(runner, "_executor", None)
+    if executor is not None:
+        executor.shutdown(wait=True)
     assert handled and "候補を表示・共有しません" in result
     assert "config.json" not in result
 

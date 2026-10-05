@@ -14,9 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, help="Use an already downloaded archive without network")
+    parser.add_argument("--fixture", choices=("0.21.0", "0.21.4"), default="0.21.0")
     args = parser.parse_args()
-    pin = json.loads((ROOT / "tests/hermes_e2e/pin.json").read_text())
-    destination = ROOT / ".cache/hermes"
+    pin = json.loads((ROOT / "tests/hermes_e2e/pin.json").read_text())["fixtures"][args.fixture]
+    destination = ROOT / (".cache/hermes" if args.fixture == "0.21.0" else ".cache/hermes-" + args.fixture)
     if destination.exists():
         raise SystemExit(f"Refusing to overwrite {destination}")
     destination.parent.mkdir(exist_ok=True)
@@ -25,7 +26,7 @@ def main():
         archive = args.archive
         if archive is None:
             archive = temporary / "source.tar.gz"
-            url = f"https://codeload.github.com/{pin['repository']}/tar.gz/{pin['commit']}"
+            url = pin.get("archive_url") or f"https://codeload.github.com/{pin['repository']}/tar.gz/{pin['commit']}"
             with urlopen(url, timeout=60) as source, archive.open("wb") as target:
                 shutil.copyfileobj(source, target)
         if hashlib.sha256(archive.read_bytes()).hexdigest() != pin["archive_sha256"]:

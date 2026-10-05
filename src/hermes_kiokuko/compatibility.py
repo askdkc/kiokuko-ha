@@ -1,3 +1,4 @@
+import hashlib
 import inspect
 from pathlib import Path
 import re
@@ -7,6 +8,18 @@ from .config import load_config, validate_native
 from .errors import KiokukoError
 
 AUDITED_SHA = "13e72fb205b735df679e0fd5f5996a34ac4accc6"
+
+
+AUDITED_DISPATCH_SOURCES = {'0.21.0': {'commit': '13e72fb205b735df679e0fd5f5996a34ac4accc6',
+            'files': {'gateway/run_inbound.py': '8b983ea50a991d5ec8512062f8baea73a3e4a9aec8a6093fe7b19004f0f7d45c',
+                      'gateway/run.py': '0ac228aa6f766474013565e24aa65d87cea992f5e665e4de2bb5782e5fd3848e',
+                      'hermes_cli/plugins.py': '546c692e3f251bc8ef6920c0c1cfc94a26a892b4076c45aa75616e85dc48680b',
+                      'cli.py': '1acf08b2002d1e9bba58360986d53a7f1f7d6724a79b6dbe09c77fc74a160151'}},
+ '0.21.4': {'commit': 'e794bb31cb75d2dc8937f928e736fb73155e674c',
+            'files': {'gateway/run_inbound.py': '5e66d8b1b7c6c28e471e84b51c57a55415fa30c3df3df5701ddc65a3b8a6b386',
+                      'gateway/run.py': 'acb8e4ed5b675ce49c12ebd1014aa034f746068a4fde23275c29e6e77b29e69c',
+                      'hermes_cli/plugins.py': '78b57210ab2aadaacac11ac11a1112e252872fc8021e0d692f8ad1566bdb2922',
+                      'cli.py': '4a1710806d415804e8eeecb01e49e3c72231bb060d6fe202b84cb3263460ae69'}}}
 
 
 def active_home() -> Path:
@@ -72,7 +85,9 @@ def host_contract_report():
     code = ('UNSUPPORTED_HERMES' if modules.get('hermes_cli') is not None and not supported
             else 'HOST_CONTRACT_MISMATCH') if failed else None
     return {'ok': not failed, 'error': code, 'hermes_version': version,
-            'checks': checks, 'failed_checks': failed}
+            'checks': checks, 'failed_checks': failed,
+            'scope': 'import_and_api_checks',
+            'dispatch_contract': dispatch_contract_report(modules.get('hermes_cli'), version)}
 
 
 def check_host(home: Path | None = None, *, require_config=True) -> None:
@@ -96,3 +111,25 @@ def surface_is_compatible_and_selected() -> bool:
         return True
     except (KiokukoError, OSError):
         return False
+
+
+def dispatch_contract_report(hermes_module, version):
+    """Identify tested fixture sources, without executing a command in doctor."""
+    audited = AUDITED_DISPATCH_SOURCES.get(version)
+    matched = False
+    module_path = getattr(hermes_module, '__file__', None)
+    if audited and module_path:
+        root = Path(module_path).resolve().parent.parent
+        try:
+            matched = all(hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
+                          for name, digest in audited['files'].items())
+        except OSError:
+            pass
+    return {
+        'status': 'tested_fixture_source_match' if matched else 'unverified',
+        'commit': audited['commit'] if matched else None,
+        'runtime_exercised': False,
+        'scope': 'source_fingerprint_only',
+        'required': 'sync handler coroutine awaited on origin Gateway task; CLI entry remains synchronous',
+        'note': 'API checks do not guarantee Gateway delivery. Doctor does not send commands or run updates.',
+    }

@@ -1,4 +1,4 @@
-"""Read-only diagnostics work even when native configuration is invalid."""
+"""Read-only diagnostics, with an explicit opt-in host plugin loading check."""
 import importlib.metadata
 import sqlite3
 import sys
@@ -12,7 +12,34 @@ from .filesystem import checked_file
 from .store import SCHEMA_VERSION
 
 
-def diagnose(home, *, running=False):
+def command_registration(home):
+    """Explicitly load configured host plugins; report only this process, without raw errors."""
+    expected = ('kioku-curation', 'kiokuko-update', 'kiokuko-monitor', 'kiokuko-research')
+    result = {'checked': True, 'process': 'current_process', 'gateway_loaded': None,
+              'enabled': False, 'commands': {name: False for name in expected}, 'ok': False}
+    try:
+        from hermes_constants import get_hermes_home
+        if Path(get_hermes_home()).resolve() != Path(home).resolve():
+            result['error'] = 'DIAGNOSTIC_PLUGIN_PROFILE_MISMATCH'
+            return result
+        from hermes_cli.plugins import get_plugin_commands, get_plugin_manager
+        commands = get_plugin_commands()
+        row = next((row for row in get_plugin_manager().list_plugins()
+                    if row['name'] == 'kiokuko-tools'), None)
+        result['enabled'] = bool(row and row['enabled'])
+        result['load_error_present'] = bool(row and row.get('error'))
+        result['commands'] = {name: name in commands and commands[name].get('plugin') == 'kiokuko-tools'
+                              for name in expected}
+        result['ok'] = result['enabled'] and all(result['commands'].values()) and not result['load_error_present']
+        if not result['ok']:
+            result['error'] = 'DIAGNOSTIC_PLUGIN_COMMANDS_UNAVAILABLE'
+    except Exception:
+        # Host/plugin exceptions can contain configuration values; never serialize them.
+        result['error'] = 'DIAGNOSTIC_PLUGIN_LOAD_FAILED'
+    return result
+
+
+def diagnose(home, *, running=False, load_plugin=False):
     home = Path(home).resolve()
     from .runtime import provider_ready
     result = {'python': sys.executable, 'python_version': sys.version.split()[0],
@@ -36,6 +63,15 @@ def diagnose(home, *, running=False):
     result['entrypoints'] = [{ 'group': group, 'name': ep.name, 'value': ep.value}
         for group in ('hermes_agent.plugins', 'hermes_agent.memory_providers')
         for ep in importlib.metadata.entry_points(group=group) if ep.name in {'kiokuko', 'kiokuko-tools'}]
+    required = {('hermes_agent.plugins', 'kiokuko-tools'), ('hermes_agent.memory_providers', 'kiokuko')}
+    result['entrypoints_ready'] = required <= {(ep['group'], ep['name']) for ep in result['entrypoints']}
+    if not result['entrypoints_ready']:
+        result['errors'].append('DIAGNOSTIC_ENTRYPOINTS_UNAVAILABLE')
+    result['command_registration'] = {'checked': False, 'gateway_loaded': None}
+    if load_plugin and result['host_ready']:
+        result['command_registration'] = command_registration(home)
+        if not result['command_registration']['ok']:
+            result['errors'].append(result['command_registration']['error'])
     path = home / 'kiokuko' / 'kiokuko.db'
     try:
         checked_file(path)

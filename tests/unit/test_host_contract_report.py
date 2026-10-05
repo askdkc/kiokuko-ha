@@ -67,3 +67,18 @@ def test_changed_signature_shows_actual_and_required_parameters(modules):
 def test_unsupported_version_keeps_existing_failure_code(modules):
     modules['hermes_cli'].__version__ = '0.22.0'
     assert host_contract_report()['error'] == 'UNSUPPORTED_HERMES'
+
+
+def test_api_success_does_not_claim_gateway_dispatch_verified(modules):
+    result = host_contract_report()
+    assert result['ok'] and result['scope'] == 'import_and_api_checks'
+    assert result['dispatch_contract']['status'] == 'unverified'
+    assert result['dispatch_contract']['runtime_exercised'] is False
+
+
+@pytest.mark.parametrize('version', ['0.0.0', '0.21.99'])
+def test_unstamped_and_untested_hosts_are_identified(modules, version):
+    modules['hermes_cli'].__version__ = version
+    result = host_contract_report()
+    assert result['ok'] is (version != '0.0.0')
+    assert result['dispatch_contract']['status'] == 'unverified'

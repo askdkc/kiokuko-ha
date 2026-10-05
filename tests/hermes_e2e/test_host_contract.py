@@ -132,3 +132,11 @@ def test_provider_shutdown_does_not_revoke_other_owner(host):
     from hermes_kiokuko.errors import KiokukoError
     with pytest.raises(KiokukoError, match="PROVIDER_NOT_READY"):
         runtime.current()
+
+
+def test_doctor_distinguishes_api_checks_from_fixture_contract(host):
+    from hermes_kiokuko.compatibility import host_contract_report
+    result = host_contract_report()
+    assert result['ok']
+    assert result['dispatch_contract']['status'] == 'tested_fixture_source_match'
+    assert result['dispatch_contract']['runtime_exercised'] is False

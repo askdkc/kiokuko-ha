@@ -11,7 +11,7 @@
 | macOS arm64 / Python 3.13.14 | unit・SQLite integration | 110 passed |
 | distribution | sdistからwheel作成、SQL・plugin metadata・二つのentry point・Orca bundleとreader | 検証済み |
 
-Hermesは`NousResearch/hermes-agent@13e72fb205b735df679e0fd5f5996a34ac4accc6`（0.21.0）に固定しています。[pin.json](../tests/hermes_e2e/pin.json)にarchiveと契約対象ソースのSHA-256を記録し、host fixtureはimport先の対象ファイルを照合します。別の0.21.xを同じ結果と見なしません。
+Hermes fixtureは0.21.0（`13e72fb205b735df679e0fd5f5996a34ac4accc6`）と0.21.4（`e794bb31cb75d2dc8937f928e736fb73155e674c`）を保持します。[pin.json](../tests/hermes_e2e/pin.json)にarchiveと契約対象ソースのSHA-256を記録し、host fixtureはimport先の対象ファイルを照合します。別の0.21.xを同じ結果と見なしません。
 
 ## 実際に通した経路
 
@@ -65,7 +65,10 @@ Hermes統合試験は固定hostを別途installします。取得scriptは既存
 ```sh
 .venv/bin/python scripts/fetch_hermes_fixture.py
 .venv/bin/python -m pip install -e .cache/hermes
-.venv/bin/python -m pytest -q
+.venv/bin/python -m pytest tests/hermes_e2e -q
+.venv/bin/python scripts/fetch_hermes_fixture.py --fixture 0.21.4
+KIOKUKO_HERMES_FIXTURE=0.21.4 PYTHONPATH=.cache/hermes-0.21.4:src \
+  .venv/bin/python -m pytest tests/hermes_e2e -q
 ```
 
 host未install時はHermes suiteがskipされます。**coreのみの合格やskipをhost E2E合格として扱わないでください。** hostが存在してpinが不一致ならskipせず失敗します。
@@ -77,3 +80,38 @@ host未install時はHermes suiteがskipされます。**coreのみの合格やsk
 ```
 
 wheelにはruntime package、SQL、plugin manifest、entry point、ビルド済みOrca bundle、固定Python reader、第三者licenseを含めます。Hermes本体、Node実行環境、DB、identity key、native memory、開発用cacheは含めません。package自体にHermesの重複依存を宣言せず、hostの既存環境と起動時の互換性検査を使います。
+
+
+## Gateway更新コマンドの回帰確認
+
+同期handlerはGateway envelopeを捕捉したcoroutineを返し、hostが元taskでawaitした
+時点でctx・task・現在のenvelopeを照合して一度だけ消費します。executorでは消費しません。
+contextのコピーも消費状態を共有します。照合に失敗したGateway呼出しはCLIへfallbackしません。
+認証後のI/Oは従来のto_threadに残し、CLIのloop拒否、pipのpackage/index/venv制約を維持します。
+Hermes 0.21.4で移動したSDK変換helperは新moduleから取得し、0.21.0の経路も維持します。
+
+doctorのhost_contract.okはimport/API検査の結果です。dispatch_contractは固定ソースの
+fingerprint一致を別に示します。runtime_exercised=falseのため、doctorだけで実Gateway配送が
+成功したとは判断できません。未検証sourceはunverified、0.0.0とPython 3.14は従来どおり未対応です。
+
+両hostを別processで実行します。archive/source checksum不一致は失敗とし、module cacheを
+混在させません。localhost模擬HTTP serverを使うsuiteにはloopback listenerの許可が必要です。
+GatewayRunnerとCLIは部分初期化し、認証結果・transport・pipは模擬です。
+通常startup、実Telegram配送、PyPIでの公開後更新は別途確認が必要です。
+
+wheel導入後の試験（両fixtureと現在のtest依存関係が必要）:
+
+```sh
+.venv/bin/python -m build --no-isolation
+.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.11-py3-none-any.whl
+```
+
+このscriptは使い捨てvenvへローカルwheelを実pipで2回導入し、両hostのregistry・実Gateway
+dispatch・CLI process_commandを検査します。Gatewayからのpip更新は模擬であり、実pip試験は
+offlineのローカルwheel再導入です。本番PyPIや利用者のHermes環境にはアクセスしません。
+
+2026-10-06の修正前再現では、0.21.4の実Gateway update/statusとexecutor→元taskの試験が
+3 platformで失敗（6件）しました。修正後の最終件数はunit/integration 331件、
+各Hermes suite 224件です。status/helpの非更新、認証否定、envelope盗用/replay、
+cancel後のjob観測とlock解放、CLIの4操作、monitor/research/curationも含みます。
+実PyPI更新、通常startup、実Telegram配送、公開・導入・再起動は未実施です。

@@ -3,6 +3,59 @@ import threading
 import pytest
 
 
+def test_doctor_explicitly_checks_command_loading(host):
+    home, _ = host
+    from hermes_kiokuko.cli import main
+    from hermes_kiokuko.diagnostics import diagnose
+    from hermes_kiokuko.store import Store
+    Store(home, initialize=True).close()
+    result = diagnose(home, load_plugin=True)
+    assert result['ok'] is True
+    assert result['command_registration']['ok'] is True
+    assert result['command_registration']['commands']['kiokuko-update'] is True
+    assert result['command_registration']['gateway_loaded'] is None
+    assert main(['doctor', '--load-plugin']) == 0
+
+
+@pytest.mark.parametrize('failure', ['registration', 'disabled', 'missing_command', 'wrong_owner'])
+def test_doctor_does_not_hide_plugin_registration_failure(host, monkeypatch, failure):
+    home, manager = host
+    from hermes_cli.plugins import _reset_plugin_managers_for_tests
+    from hermes_kiokuko.config import read_yaml, write_yaml
+    from hermes_kiokuko.diagnostics import diagnose
+    from hermes_kiokuko.store import Store
+    Store(home, initialize=True).close()
+    if failure == 'missing_command':
+        manager._plugin_commands.pop('kiokuko-update')
+    elif failure == 'wrong_owner':
+        manager._plugin_commands['kiokuko-update']['plugin'] = 'another-plugin'
+    else:
+        _reset_plugin_managers_for_tests()
+        if failure == 'disabled':
+            cfg = read_yaml(home / 'config.yaml')
+            cfg['plugins']['disabled'] = ['kiokuko-tools']
+            write_yaml(home / 'config.yaml', cfg)
+        else:
+            def reject(*_):
+                raise RuntimeError('private registration secret')
+            monkeypatch.setattr('hermes_kiokuko.plugin_entry.register', reject)
+    info = diagnose(home, load_plugin=True)
+    assert info['ok'] is False
+    if failure != 'disabled':
+        assert info['command_registration']['ok'] is False
+        assert info['command_registration']['commands']['kiokuko-update'] is False
+        assert 'DIAGNOSTIC_PLUGIN_COMMANDS_UNAVAILABLE' in info['errors']
+    assert 'private registration secret' not in str(info)
+
+
+def test_plugin_probe_rejects_different_profile_before_loading(host, monkeypatch, tmp_path):
+    from hermes_kiokuko.diagnostics import command_registration
+    def unexpected():
+        raise AssertionError('wrong profile must not discover plugins')
+    monkeypatch.setattr('hermes_cli.plugins.get_plugin_commands', unexpected)
+    assert command_registration(tmp_path / 'other')['error'] == 'DIAGNOSTIC_PLUGIN_PROFILE_MISMATCH'
+
+
 def test_real_cli_parser_and_approval(host):
     home, _ = host
     from hermes_kiokuko.cli import setup_parser, execute

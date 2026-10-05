@@ -92,10 +92,20 @@ def test_monitor_slash_denies_non_admin_paths(monitor_slash, monkeypatch, contex
 def test_monitor_gateway_dispatch_without_sender_context_denied(monitor_slash):
     home, _, _, _ = monitor_slash
     from gateway.run_inbound import GatewayInboundMixin
-    runner = SimpleNamespace(_draining=False, _hm_quick_commands=lambda: {})
+    from gateway.run import GatewayRunner
+    from gateway.config import GatewayConfig, Platform
+    from gateway.session import SessionSource
+    runner = object.__new__(GatewayRunner)
+    runner._draining = False
+    runner.config = GatewayConfig()
+    runner._hm_quick_commands = lambda: {}
+    source = SessionSource(platform=Platform.TELEGRAM, user_id='sender', chat_id='chat', chat_type='dm')
     event = SimpleNamespace(get_command_args=lambda: 'enable')
     handled, result, _ = asyncio.run(GatewayInboundMixin._hm_dispatch_quick_and_plugin_commands(
-        runner, event, None, 'kiokuko_monitor'))
+        runner, event, source, 'kiokuko_monitor'))
+    executor = getattr(runner, "_executor", None)
+    if executor is not None:
+        executor.shutdown(wait=True)
     assert handled and '対話CLIで実行' in result
     assert not load_config(home)['monitor']['enabled']
 

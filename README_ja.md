@@ -49,7 +49,7 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 
 ## 更新
 
-Hermesの対話CLI・Discord・Telegramなどのチャットから更新できます。
+Kiokukoのコマンド用pluginが読み込まれたHermesの対話CLI・Discord・Telegramなどのチャットから更新できます。
 
 ```text
 /kiokuko-update
@@ -75,6 +75,28 @@ fi
 ```
 
 更新完了を確認してからHermesプロセスを再起動します。Telegram・Discordで使う場合は、そのチャットを担当するHermes Gatewayプロセスを再起動してください。新しい会話セッションだけではpluginコードが再読込されません。OSの再起動は不要です。Python 3.14は現在の対応範囲外です。
+
+### `/kiokuko-update` が `Unknown command` になる場合
+
+そのGatewayにはコマンドが登録されていません。未登録の更新コマンドでは復旧できないため、まず端末で同じPython・profileの設定と登録を確認します。`main`の例です。
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit 1
+"$HERMES_PY" -m hermes_kiokuko setup
+"$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+```
+
+`--load-plugin`は設定されたHermes pluginをこの端末プロセスへ読み込み、Kiokukoの4コマンドの登録と所有者を検査します。通常の`doctor`は読み込みを行わず、登録確認は`checked: false`です。いずれも稼働中Gatewayの登録証明にはなりません。`hermes plugins list`の`enabled`も設定状態であり、読み込み成功の証明ではありません。
+
+`command_registration.ok: true`と全体の`ok: true`を確認してから、同じprofileの担当Gatewayを再起動します。
+
+```sh
+"$HERMES_PY" -m hermes_cli.main --profile main gateway restart
+```
+
+再起動後、チャットの`/commands`に`kiokuko-update`があるか確認します。端末では登録成功でもGatewayにない場合は、担当プロセスのPython・profile・再起動対象を確認してください。登録検査が失敗した場合はGateway起動ログの`Failed to load plugin 'kiokuko-tools'`と診断結果を確認します。`--load-plugin`が未対応の旧版では、上の通常の端末更新を使ってから再検査してください。`pip`の有無は登録後の更新処理の問題であり、`Unknown command`の原因を説明しません。
 
 ### wheelの手動インストールと復旧
 

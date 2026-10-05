@@ -50,9 +50,11 @@ def main():
         from tools.skills_tool import skill_view
         assert 'Preserve the current' in str(skill_view('kiokuko-tools:memory-reasoning'))
         from hermes_kiokuko.diagnostics import diagnose
-        assert diagnose(home)['host_ready']
+        diagnosis = diagnose(home, load_plugin=True)
+        assert diagnosis['ok'], diagnosis
+        assert diagnosis['command_registration']['commands']['kiokuko-update']
         _reset_plugin_managers_for_tests()
-        print('PASS: wheel isolated install, provider directory/load, entrypoints, 6 read-only Skills and unchanged host discovery')
+        print('PASS: wheel isolated install, provider directory/load, entrypoints, 6 read-only Skills, command registration and unchanged host discovery')
 
 
 if __name__ == '__main__':

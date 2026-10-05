@@ -49,7 +49,7 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 
 ## Update
 
-Run these commands in the interactive Hermes CLI or a Gateway chat such as Discord or Telegram:
+After the Kiokuko command plugin has loaded, run these commands in the interactive Hermes CLI or a Gateway chat such as Discord or Telegram:
 
 ```text
 /kiokuko-update
@@ -75,6 +75,28 @@ fi
 ```
 
 Wait for the update to finish, then restart the Hermes process. For Telegram/Discord, restart the Hermes Gateway process serving those chats: a new chat session does not reload the installed plugin code. No OS reboot is needed. Python 3.14 is outside the current support range.
+
+### When `/kiokuko-update` returns `Unknown command`
+
+The command is not registered in that Gateway. An unregistered update command cannot repair this state. Check configuration and registration from a terminal using the same Python and profile. This example targets `main`:
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit 1
+"$HERMES_PY" -m hermes_kiokuko setup
+"$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+```
+
+`--load-plugin` loads configured Hermes plugins into this terminal process and checks ownership and registration of all four Kiokuko commands. Ordinary `doctor` does not load plugins and reports `checked: false` for command registration. Neither proves what the running Gateway loaded. The `enabled` label in `hermes plugins list` also describes configuration, rather than successful loading.
+
+After both `command_registration.ok: true` and the overall `ok: true`, restart the Gateway serving the same profile:
+
+```sh
+"$HERMES_PY" -m hermes_cli.main --profile main gateway restart
+```
+
+Check that `/commands` in the chat lists `kiokuko-update`. If terminal registration succeeds but the Gateway still lacks the command, check the serving process's Python, profile, and restart target. If registration fails, inspect its diagnostics and the Gateway startup log for `Failed to load plugin 'kiokuko-tools'`. Older releases without `--load-plugin` need the normal terminal update above before this check. Missing `pip` affects the update after registration; it does not explain `Unknown command`.
 
 ### Manual wheel installation and recovery
 

@@ -19,7 +19,10 @@ from .workspace import resolve_workspace
 def setup_parser(parser):
     sub = parser.add_subparsers(dest="kiokuko_action", required=True)
     for command in ("setup", "status", "doctor", "config", "verify", "reindex", "pending", "conflicts", "export", "principals", "workspaces", "curation"):
-        sub.add_parser(command)
+        child = sub.add_parser(command)
+        if command == "doctor":
+            child.add_argument('--load-plugin', action='store_true',
+                               help='Load configured Hermes plugins and check Kiokuko command registration in this process')
     from .monitor_cli import setup_parser as monitor_parser
     monitor_parser(sub.add_parser("monitor"))
     from .profile_cli import setup_parser as profile_parser
@@ -74,7 +77,7 @@ def execute(args, home, *, input_fn=input, output=print):
     action = args.kiokuko_action
     if action in {"doctor", "status"}:
         from .diagnostics import diagnose
-        return diagnose(home)
+        return diagnose(home, load_plugin=getattr(args, 'load_plugin', False))
     if action == "setup":
         check_host(home, require_config=False)
         setup(home)

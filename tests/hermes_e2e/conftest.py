@@ -25,7 +25,9 @@ def host(tmp_path, monkeypatch):
     write_yaml(home / "config.yaml", cfg)
     hermes = pytest.importorskip("hermes_cli")
     root = Path(hermes.__file__).resolve().parent.parent
-    manifest = json.loads((Path(__file__).with_name("pin.json")).read_text())
+    pins = json.loads((Path(__file__).with_name("pin.json")).read_text())
+    selected = os.environ.get("KIOKUKO_HERMES_FIXTURE", pins["default"])
+    manifest = pins["fixtures"][selected]
     for path, checksum in manifest["files"].items():
         assert hashlib.sha256((root / path).read_bytes()).hexdigest() == checksum, f"Unaudited host source: {path}"
     from gateway import session_context

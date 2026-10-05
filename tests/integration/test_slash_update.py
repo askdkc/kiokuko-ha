@@ -65,3 +65,64 @@ def test_failure_is_not_success_and_releases_venv_lock(tmp_path, monkeypatch, fa
     perform_update(job, {}, acquire_lock(lock, exclusive=True))
     assert job.state == "failed" and job.version == ""
     os.close(acquire_lock(lock, exclusive=True, timeout=0))
+
+
+@pytest.mark.parametrize('version', ['0.1.11', '', 'invalid version'])
+def test_noop_and_invalid_version_results_are_explicit(tmp_path, monkeypatch, version):
+    import hermes_kiokuko.slash_update as module
+    from types import SimpleNamespace
+    monkeypatch.setattr(module.subprocess, 'run',
+                        lambda argv, **kw: SimpleNamespace(returncode=0, stdout=version))
+    job = UpdateJob(tmp_path, 'unused-python', '0.1.11')
+    lock = tmp_path / 'update.lock'
+    perform_update(job, {}, acquire_lock(lock, exclusive=True))
+    assert job.state == ('complete' if version == '0.1.11' else 'failed')
+    assert ('再起動' in module.describe(job)) if job.state == 'complete' else job.error == 'UPDATE_VERSION_UNAVAILABLE'
+    os.close(acquire_lock(lock, exclusive=True, timeout=0))
+
+
+def test_thread_start_failure_releases_lock_and_status_remains_readonly(tmp_path, monkeypatch):
+    import hermes_kiokuko.slash_update as module
+    monkeypatch.setattr(module, 'check_host', lambda home: None)
+    monkeypatch.setattr(module, '_job', None)
+    monkeypatch.setattr(module.sys, 'prefix', str(tmp_path))
+    monkeypatch.setattr(module.threading.Thread, 'start',
+                        lambda self: (_ for _ in ()).throw(RuntimeError('start failed')))
+    handler = module.SlashUpdate(None)
+    assert 'UPDATE_UNAVAILABLE' in handler.execute(tmp_path, '')
+    os.close(acquire_lock(tmp_path / '.kiokuko-update.lock', exclusive=True, timeout=0))
+    assert 'まだ更新' in handler.execute(tmp_path, 'status')
+
+
+@pytest.mark.parametrize('state', ['running', 'complete', 'failed'])
+@pytest.mark.parametrize('action', ['', 'status', 'help', 'retry'])
+def test_job_transitions_only_retry_failed_starts_worker(tmp_path, monkeypatch, state, action):
+    import hermes_kiokuko.slash_update as module
+    monkeypatch.setattr(module, 'check_host', lambda home: None)
+    monkeypatch.setattr(module.sys, 'prefix', str(tmp_path))
+    job = UpdateJob(tmp_path, 'unused-python', '0.1.11', state=state, version='0.1.11')
+    monkeypatch.setattr(module, '_job', job)
+    calls = []
+    # Record the startup but close its real lock without launching a thread.
+    def start(thread):
+        calls.append(thread)
+        os.close(thread._args[2])
+    monkeypatch.setattr(module.threading.Thread, 'start', start)
+    module.SlashUpdate(None).execute(tmp_path, action)
+    assert len(calls) == int(state == 'failed' and action == 'retry')
+    if not calls:
+        assert module._job is job
+
+
+def test_gateway_checks_host_before_status_but_cli_operation_does_not(tmp_path, monkeypatch):
+    import hermes_kiokuko.slash_update as module
+    import hermes_kiokuko.gateway_commands as gateway
+    from hermes_kiokuko.errors import KiokukoError
+    monkeypatch.setattr(module, '_job', None)
+    def unsupported(home):
+        raise KiokukoError('UNSUPPORTED_HERMES')
+    monkeypatch.setattr(gateway, 'check_host', unsupported)
+    handler = module.SlashUpdate(None)
+    assert 'まだ更新' in handler.execute(tmp_path, 'status')
+    with pytest.raises(KiokukoError, match='UNSUPPORTED_HERMES'):
+        gateway.GatewayCommands._execute(handler, tmp_path, 'status')

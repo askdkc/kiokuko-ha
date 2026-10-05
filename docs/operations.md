@@ -9,7 +9,8 @@ Hermesの移行処理は`find_provider_dir()`でインストール済みかを�
 単独の`.py`ファイルではなく`__init__.py`を持つパッケージを公開します。
 旧登録先では、通常のentry point読み込みが成功しても
 `configured but not installed and not in the plugin catalog`が出る場合があります。
-修正版wheelを同じPython環境へ再インストールし、担当Gatewayを再起動します。
+修正を含むリリースを同じPython環境へ更新し、担当Gatewayを再起動します。
+通常の更新手順はREADMEを参照してください。
 既存DBの削除や`memory.provider`の変更は必要ありません。
 
 ```sh
