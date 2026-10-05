@@ -14,7 +14,11 @@ Install Kiokuko from PyPI into the same Python environment used by Hermes. This 
 
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
-"$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
+else
+  "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+fi
 ```
 
 Initialize the profile:
@@ -54,17 +58,48 @@ Run these commands in the interactive Hermes CLI or a Gateway chat such as Disco
 
 The update runs in the background using Hermes's own Python interpreter, with the current profile explicitly passed as `HERMES_HOME`. It upgrades the PyPI package `hermes-kiokuko` (the repository is named `kiokuko-ha`). Profiles sharing that Python environment receive the same package update; profile settings and memory databases are left intact. Use `/kiokuko-update retry` after a failure. Gateway access follows Hermes command permissions.
 
+`/kiokuko-update` requires `pip` in Hermes's Python environment. If it is unavailable, use the terminal procedure below with `uv`.
+
 For the first upgrade from v0.1.0, or to update from a terminal:
 
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # Use your actual profile path
 cd "$HOME/.hermes/hermes-agent" || exit 1
-"$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
+else
+  "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+fi
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
 Wait for the update to finish, then restart the Hermes process. For Telegram/Discord, restart the Hermes Gateway process serving those chats: a new chat session does not reload the installed plugin code. No OS reboot is needed. Python 3.14 is outside the current support range.
+
+### Manual wheel installation and recovery
+
+Reinstallation is **not required on every startup**. Use the normal update procedure for published releases. Use this procedure only to install a supplied wheel, including an unpublished fix or a replacement build with the same version. PyPI updates do not include unpublished repository changes.
+
+Transfer the wheel to the machine running Hermes and set `WHEEL` to its actual path; replace `VERSION` below with the supplied filename's version. Use the target profile's `HERMES_HOME`. The `--no-deps` option assumes Kiokuko's dependencies are already installed in this Hermes environment; omit it for a first installation that needs dependencies.
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit 1
+
+WHEEL="$HOME/hermes_kiokuko-VERSION-py3-none-any.whl"
+
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --python "$HERMES_PY" --no-deps --reinstall "$WHEEL"
+else
+  "$HERMES_PY" -m pip install --no-deps --force-reinstall "$WHEEL"
+fi
+
+"$HERMES_PY" -c 'from plugins.memory import find_provider_dir; p = find_provider_dir("kiokuko"); print(p); assert p is not None'
+"$HERMES_PY" -m hermes_kiokuko doctor
+```
+
+For a first installation, run `setup` for the target profile before `doctor`, as shown above. A detected directory confirms discovery in this CLI process; it does not prove the running Gateway loaded the package. After installation succeeds and `doctor` reports `ok: true`, restart the Hermes process serving the target profile. If detection returns `None` or `doctor` fails, see [provider discovery and host diagnostics](docs/operations.md).
 
 ## Explicit storage and approval
 

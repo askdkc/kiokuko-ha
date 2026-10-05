@@ -14,7 +14,11 @@ Hermesと同じPython環境へPyPIからインストールします。標準イ�
 
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
-"$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
+else
+  "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+fi
 ```
 
 profileを指定して初期化します。
@@ -54,17 +58,48 @@ Hermesの対話CLI・Discord・Telegramなどのチャットから更新でき�
 
 Hermesを実行しているPythonを使い、現在のprofileを`HERMES_HOME`で明示してバックグラウンド更新します。更新対象はPyPIの`hermes-kiokuko`です（リポジトリ名は`kiokuko-ha`）。同じPython環境を共有するprofileには同じパッケージ更新が適用されます。profileの設定・記憶DBは変更しません。失敗時は`/kiokuko-update retry`で再試行できます。GatewayではHermesのコマンド権限設定に従います。
 
+`/kiokuko-update`にはHermesのPython環境内の`pip`が必要です。ない場合は、下の端末手順で`uv`を使ってください。
+
 v0.1.0からの初回更新や、端末から更新する場合：
 
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # 実際のprofileパスに合わせる
 cd "$HOME/.hermes/hermes-agent" || exit 1
-"$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
+else
+  "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
+fi
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
 更新完了を確認してからHermesプロセスを再起動します。Telegram・Discordで使う場合は、そのチャットを担当するHermes Gatewayプロセスを再起動してください。新しい会話セッションだけではpluginコードが再読込されません。OSの再起動は不要です。Python 3.14は現在の対応範囲外です。
+
+### wheelの手動インストールと復旧
+
+**起動のたびに再インストールする必要はありません。** 公開済みのリリースは通常の更新手順を使います。この手順は、受け取ったwheelを入れる場合に使います。未公開の修正版や、同じバージョンの別ビルドを入れ直す場合も含みます。リポジトリ内の未公開変更はPyPIからの更新には入りません。
+
+Hermesが動くマシンへwheelを転送し、`WHEEL`を実際のファイルパスに合わせてください。下の`VERSION`は受け取ったファイル名のバージョンに置き換えます。`HERMES_HOME`は対象profileに合わせます。`--no-deps`は、そのHermes環境にKiokukoの依存パッケージが既に入っている前提です。初回インストールで依存パッケージも必要なら、このオプションを外してください。
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit 1
+
+WHEEL="$HOME/hermes_kiokuko-VERSION-py3-none-any.whl"
+
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --python "$HERMES_PY" --no-deps --reinstall "$WHEEL"
+else
+  "$HERMES_PY" -m pip install --no-deps --force-reinstall "$WHEEL"
+fi
+
+"$HERMES_PY" -c 'from plugins.memory import find_provider_dir; p = find_provider_dir("kiokuko"); print(p); assert p is not None'
+"$HERMES_PY" -m hermes_kiokuko doctor
+```
+
+初回インストールでは、上の初期化手順と同じく、対象profileへ`setup`してから`doctor`を実行します。ディレクトリの検出成功は、このCLIプロセスでパッケージを検出できたことを示します。稼働Gatewayが読み込んだ証明にはなりません。インストールが成功し、`doctor`で`ok: true`を確認したら、対象profileを担当するHermesプロセスを再起動してください。検出結果が`None`、または`doctor`が失敗する場合は[provider検出とhostの診断](docs/operations.md)を参照してください。
 
 ## 明示保存と承認
 
