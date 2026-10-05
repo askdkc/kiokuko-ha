@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-kiokuko"
-version = "0.1.10"
+version = "0.1.11"
 description = "Scoped, human-approved memory for Hermes Agent"
 readme = "README.md"
 authors = [{name = "dkc"}]
@@ -23,7 +23,7 @@ test = ["pytest>=8", "PyYAML>=6", "build"]
 kiokuko-tools = "hermes_kiokuko.plugin_entry"
 
 [project.entry-points."hermes_agent.memory_providers"]
-kiokuko = "hermes_kiokuko.provider_entry:register"
+kiokuko = "hermes_kiokuko.memory_plugin:register"
 
 [tool.setuptools.packages.find]
 where = ["src"]

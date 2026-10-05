@@ -35,6 +35,12 @@ def main():
         from hermes_kiokuko.config import setup
         from hermes_kiokuko.store import Store
         setup(home); Store(home, initialize=True).close()
+        from plugins.memory import find_provider_dir, load_memory_provider
+        directory = find_provider_dir('kiokuko')
+        assert directory is not None and directory.is_relative_to(installed)
+        assert directory.joinpath('__init__.py').is_file()
+        provider = load_memory_provider('kiokuko')
+        assert provider is not None and provider.name == 'kiokuko' and provider.is_available()
         from hermes_cli.plugins import get_plugin_manager, _reset_plugin_managers_for_tests
         manager = get_plugin_manager(); manager.discover_and_load()
         assert manager._plugins['kiokuko-tools'].enabled
@@ -46,7 +52,7 @@ def main():
         from hermes_kiokuko.diagnostics import diagnose
         assert diagnose(home)['host_ready']
         _reset_plugin_managers_for_tests()
-        print('PASS: wheel isolated install, entrypoints, 6 read-only Skills and unchanged host discovery')
+        print('PASS: wheel isolated install, provider directory/load, entrypoints, 6 read-only Skills and unchanged host discovery')
 
 
 if __name__ == '__main__':

@@ -6,6 +6,22 @@ from types import SimpleNamespace
 import pytest
 
 
+def test_memory_provider_resolves_to_package_directory(host):
+    home, _ = host
+    from pathlib import Path
+    from plugins.memory import find_provider_dir, find_provider_entry_point, load_memory_provider
+    import hermes_kiokuko.memory_plugin
+
+    entry = find_provider_entry_point("kiokuko")
+    assert entry is not None
+    directory = find_provider_dir("kiokuko")
+    assert directory == Path(hermes_kiokuko.memory_plugin.__file__).parent
+    assert directory.joinpath("__init__.py").is_file()
+    provider = load_memory_provider("kiokuko")
+    assert provider is not None and provider.name == "kiokuko" and provider.is_available()
+    assert not (home / "kiokuko" / "kiokuko.db").exists()
+
+
 @pytest.mark.parametrize("platform", ["cli", "photon"])
 def test_entrypoints_hook_worker_middleware_and_manager_sync(host, platform):
     home, manager = host

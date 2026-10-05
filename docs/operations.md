@@ -4,6 +4,32 @@
 
 一般pluginのentry pointはmoduleを公開し、MemoryProvider側はregister関数を公開します。Hermes 0.21の二つのloaderが受理する形が異なるためです。
 
+MemoryProviderの登録先は`hermes_kiokuko.memory_plugin:register`です。
+Hermesの移行処理は`find_provider_dir()`でインストール済みかを判定するため、
+単独の`.py`ファイルではなく`__init__.py`を持つパッケージを公開します。
+旧登録先では、通常のentry point読み込みが成功しても
+`configured but not installed and not in the plugin catalog`が出る場合があります。
+修正版wheelを同じPython環境へ再インストールし、担当Gatewayを再起動します。
+既存DBの削除や`memory.provider`の変更は必要ありません。
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit 1
+"$HERMES_PY" - <<'PY'
+from importlib.metadata import version
+from plugins.memory import find_provider_dir, find_provider_entry_point
+print("version:", version("hermes-kiokuko"))
+print("entrypoint:", find_provider_entry_point("kiokuko"))
+print("provider_directory:", find_provider_dir("kiokuko"))
+PY
+```
+
+entry pointがない場合は、そのPython環境にパッケージが登録されていません。
+旧登録先のentry pointがありdirectoryだけ`None`の場合は上記の検出差です。
+修正版でdirectoryが見つかっても警告が続く場合は、警告を出したプロセスの
+Python・profile・再起動の有無を確認します。CLIでの検出成功は稼働Gatewayへの反映を証明しません。
+
 ```yaml
 memory:
   provider: kiokuko
