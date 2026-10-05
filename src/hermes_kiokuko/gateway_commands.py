@@ -5,9 +5,11 @@ policies, hook interception and reply delivery in its normal dispatch pipeline.
 """
 import asyncio
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from copy import deepcopy
 from pathlib import Path
 import weakref
+import threading
 
 from .compatibility import active_home, check_host
 from .errors import KiokukoError
@@ -35,13 +37,23 @@ class GatewayCommands:
         _pending.set(None)
         if getattr(event, 'internal', False) or not getattr(event, 'allow_gateway_control', False):
             return None
+        directive = None
+        if not event.get_command():
+            from .config import load_config
+            from .research import auto_request
+            try:
+                if load_config(Path(self.ctx._manager.home_path))['research']['mode'] == 'auto' and auto_request(event.text):
+                    event = replace(event, text='/kiokuko-research ' + event.text)
+                    directive = {'action': 'rewrite', 'text': event.text}
+            except (KiokukoError, OSError, AttributeError):
+                return None
         command = (event.get_command() or '').replace('_', '-')
         if command not in self.commands:
             return None
         task = asyncio.current_task()
         if task is not None:
-            _pending.set(IncomingCommand(self, weakref.ref(task), event, gateway))
-        return None
+            _pending.set(IncomingCommand(self, weakref.ref(task), deepcopy(event), gateway))
+        return directive
 
     async def execute(self, request, command, raw_args):
         try:
@@ -70,7 +82,15 @@ class GatewayCommands:
             # Serial controls keep enable/disable ordered. Disk/Node work runs
             # off the event loop; replies still go through the host dispatcher.
             async with self.lock:
-                return await asyncio.to_thread(self._execute, self.commands[command], home, raw_args)
+                handler = self.commands[command]
+                if hasattr(handler, 'execute_gateway'):
+                    cancelled = threading.Event()
+                    try:
+                        return await asyncio.to_thread(handler.execute_gateway, home, raw_args, event, cancelled)
+                    except asyncio.CancelledError:
+                        cancelled.set()
+                        raise
+                return await asyncio.to_thread(self._execute, handler, home, raw_args)
         except KiokukoError as error:
             return f'コマンドを実行できませんでした ({error.code})。'
         except (OSError, ValueError, AttributeError, ImportError, RuntimeError):

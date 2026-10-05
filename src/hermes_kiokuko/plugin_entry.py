@@ -6,6 +6,8 @@ from .turn_hook import pre_llm_call
 
 
 def register(ctx):
+    from .bundled_skills import register as register_skills
+    register_skills(ctx)
     from .cli import setup_parser, cli_handler
     for name, schema, handler in (
             ("kiokuko_recall", RECALL_SCHEMA, recall_handler),
@@ -36,7 +38,11 @@ def register(ctx):
     ctx.register_command("kiokuko-monitor", monitor,
                          description="記憶の監視・自動抽出の状態確認と切替",
                          args_hint="[enable|disable|status]")
+    from .slash_research import SlashResearch
+    research = SlashResearch(ctx)
+    ctx.register_command('kiokuko-research', research,
+                         description='出典取得・検査後に調査回答を返す', args_hint='<依頼>')
     from .gateway_commands import GatewayCommands
     ctx.register_hook("pre_gateway_dispatch", GatewayCommands(ctx, {
-        "kiokuko-update": update, "kiokuko-monitor": monitor,
+        "kiokuko-update": update, "kiokuko-monitor": monitor, "kiokuko-research": research,
     }))

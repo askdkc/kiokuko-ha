@@ -72,3 +72,10 @@ def record_status(code, service=None):
 def status_counts():
     with _lock:
         return dict(_status)
+
+
+def provider_ready(home):
+    """Report this process's initialized provider without acquiring or creating it."""
+    with _lock:
+        return any(s.store.home == Path(home).resolve() and s.store.holder is not None
+                   for s in _owners.values())

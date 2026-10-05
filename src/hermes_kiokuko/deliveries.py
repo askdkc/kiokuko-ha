@@ -257,10 +257,9 @@ def sync_completed(service, session_id, user_content, messages):
         # Capture and completion receipt commit together. A rejected excerpt leaves no
         # 'completed' receipt that would prevent a safe retry.
         capture = service.config["passive_capture"]
-        detect = ((capture["detect_explicit_remember_requests"] and re.search(r"覚えて|記憶して|remember\b", raw, re.I)) or
-                  (capture["detect_corrections"] and re.search(r"訂正|修正して|correct\b", raw, re.I)))
-        if capture["enabled"] and detect and not raw.startswith("@kiokuko") and snap.origin not in {"background_review", "delegation"}:
-            candidate = service.propose(snap, {"claim": raw[:600], "evidence_quote": raw[:600]}, source="passive",
+        from .capture_requests import HUMAN_ORIGINS, direct_request
+        if capture["enabled"] and snap.origin in HUMAN_ORIGINS and direct_request(raw, capture):
+            candidate = service.propose(snap, {"claim": raw, "evidence_quote": raw}, source="passive",
                                        idempotency="passive:" + digest(canonical(snap.key)), _db=db)
             db.execute("UPDATE memory_evidence SET quote_verified=1 WHERE candidate_id=?", (candidate["id"],))
         insert(db, "turn_syncs", {"profile_key": snap.profile_key, "session_id": snap.session_id,

@@ -125,3 +125,5 @@ python -m hermes_kiokuko task-profiles status
 ```
 
 [設定・各モード・上限・削除](docs/task-profiles.md)
+
+[出典を検査する調査コマンドと診断](docs/research.md): `/kiokuko-research <request>` / `/kiokuko-research status`.

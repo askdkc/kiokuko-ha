@@ -310,7 +310,8 @@ class Service:
             return {"entry_id": entry["id"], "revision": entry["current_revision"]}
 
     def propose(self, snapshot, args, *, idempotency=None, source="model", _db=None):
-        if snapshot.origin in {"background_review", "delegation"}:
+        from .capture_requests import HUMAN_ORIGINS
+        if source != "import" and snapshot.origin not in HUMAN_ORIGINS:
             raise KiokukoError("OPTIONAL_CAPTURE_UNAVAILABLE")
         allowed = {"action", "claim", "scope", "entry_id", "expected_revision", "evidence_quote", "kind", "subject_key"}
         if set(args) - allowed:
@@ -347,6 +348,21 @@ class Service:
                 target = target["id"]
             key = idempotency or digest(canonical([snapshot.key, args]))
             existing = db.execute("SELECT * FROM memory_candidates WHERE idempotency_key=?", (key,)).fetchone()
+            if existing:
+                return {"id": existing["id"], "state": existing["state"]}
+            # Exact pending duplicates only, within the same human/session generation.
+            existing = db.execute("""SELECT c.id,c.state FROM memory_candidates c
+                WHERE c.profile_key=? AND c.session_id=? AND c.session_generation=?
+                AND c.origin=? AND c.principal_id IS ? AND c.conversation_id IS ? AND c.workspace_id IS ?
+                AND c.proposed_scope_type=? AND c.proposed_kind=? AND c.proposed_subject_key IS ?
+                AND c.proposal_action=? AND c.target_entry_id IS ? AND c.expected_revision IS ?
+                AND c.proposed_claim IS ? AND c.state='pending'
+                AND EXISTS (SELECT 1 FROM turn_snapshots ts WHERE ts.profile_key=c.profile_key
+                    AND ts.session_id=c.session_id AND ts.turn_id=c.turn_id AND ts.principal_id IS ?)
+                AND COALESCE((SELECT excerpt FROM memory_evidence WHERE candidate_id=c.id
+                    AND source_kind='proposed_quote' LIMIT 1),'')=? LIMIT 1""",
+                (snapshot.profile_key, snapshot.session_id, snapshot.session_generation,
+                 snapshot.origin, p, c, w, scope, kind, subject, action, target, revision, body, snapshot.principal_id, quote or '')).fetchone()
             if existing:
                 return {"id": existing["id"], "state": existing["state"]}
             candidate = dict(id=new_id("cand"), idempotency_key=key, profile_key=snapshot.profile_key,

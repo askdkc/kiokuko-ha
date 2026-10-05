@@ -6,6 +6,7 @@ from .filesystem import atomic_write, file_lock, private_directory
 
 DEFAULTS = {
     "schema_version": 1,
+    "research": {"mode": "command"},
     "monitor": {"enabled": False},
     "experience_learning": {"mode": "off"},
     "task_profile_memory": {"mode": "off"},
@@ -74,7 +75,7 @@ def load_config(home: Path) -> dict:
             cfg[key].update(value)
         else:
             cfg[key] = value
-    adjustable = {("task_profile_memory", "mode"), ("experience_learning", "mode"),("monitor", "enabled"), ("context_injection", "enabled"), ("context_injection", "max_entries"),
+    adjustable = {("research", "mode"),("task_profile_memory", "mode"), ("experience_learning", "mode"),("monitor", "enabled"), ("context_injection", "enabled"), ("context_injection", "max_entries"),
                   ("verified_compaction", "enabled"),
                   ("context_injection", "max_chars"), ("context_injection", "min_authority"),
                   ("context_injection", "min_confidence"), ("explicit_commands", "enabled"),
@@ -92,6 +93,8 @@ def load_config(home: Path) -> dict:
     if cfg["experience_learning"]["mode"] not in {"off", "shadow", "auto"}:
         raise KiokukoError("INVALID_CONFIG")
     if cfg["task_profile_memory"]["mode"] not in {"off", "shadow", "suggest", "resolve"}:
+        raise KiokukoError("INVALID_CONFIG")
+    if cfg["research"]["mode"] not in {"off", "command", "auto"}:
         raise KiokukoError("INVALID_CONFIG")
     inject = cfg["context_injection"]
     if not (1 <= inject["max_entries"] <= 8 and 700 <= inject["max_chars"] <= 2200

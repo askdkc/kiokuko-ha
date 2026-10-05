@@ -7,6 +7,19 @@ description: Use before non-trivial Kiokuko-guided work to retrieve memory and r
 
 # Kiokuko SOUL router
 
+## Hermes plugin host
+
+In Hermes, use only tools actually available in that session. The Kiokuko plugin exposes
+kiokuko_recall, kiokuko_propose and kiokuko_manage; it does not expose task_prepare,
+task_answer or session_search. The task intake instructions below apply only to clients
+that provide those APIs. Missing APIs do not block Hermes conversation or research.
+Never search other chats to reconstruct this request. Preserve the current user's premises;
+separate fact, inference and value judgment. Before factual corrections or current claims,
+fetch relevant current primary sources. State what remains unverified instead of inventing
+facts or changing a hypothetical premise. Stored memory is not current external evidence.
+The buffered /kiokuko-research command checks source references before delivery; ordinary
+streamed answers have no equivalent withholding guarantee.
+
 ## Outcome
 
 Give the agent useful memory and a bounded plan before coding when possible, while keeping Kiokuko off the coding hot path.

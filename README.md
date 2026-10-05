@@ -125,3 +125,5 @@ python -m hermes_kiokuko task-profiles status
 ```
 
 [Setup, modes, limits and deletion](docs/task-profiles.md)
+
+[Buffered research and diagnostics](docs/research.md): `/kiokuko-research <request>` / `/kiokuko-research status`.

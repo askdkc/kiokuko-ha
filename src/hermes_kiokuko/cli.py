@@ -72,6 +72,9 @@ def cli_snapshot(service, content, *, operation_id=None, principal="profile-owne
 
 def execute(args, home, *, input_fn=input, output=print):
     action = args.kiokuko_action
+    if action in {"doctor", "status"}:
+        from .diagnostics import diagnose
+        return diagnose(home)
     if action == "setup":
         check_host(home, require_config=False)
         setup(home)
@@ -96,26 +99,10 @@ def execute(args, home, *, input_fn=input, output=print):
         if action == "monitor":
             from .monitor_cli import execute as execute_monitor
             return execute_monitor(service, args)
-        if action in {"doctor", "verify"}:
-            result = verify(service)
-            if action == "doctor":
-                from .monitor import status as monitor_status
-                result["monitor"] = monitor_status(service)
-            return result
+        if action == "verify":
+            return verify(service)
         if action == "config":
             return load_config(home)
-        if action == "status":
-            from .monitor import status as monitor_status
-            monitor_info = monitor_status(service)
-            with service.transaction() as db:
-                return {"deliveries": dict(db.execute("SELECT state,count(*) FROM retrieval_deliveries GROUP BY state")),
-                        "candidates": dict(db.execute("SELECT state,count(*) FROM memory_candidates GROUP BY state")),
-                        "operations": dict(db.execute("SELECT state,count(*) FROM explicit_operation_receipts GROUP BY state")),
-                        "recent_operations": [dict(row) for row in db.execute("SELECT operation,state,entry_id,entry_revision,created_at FROM explicit_operation_receipts ORDER BY created_at DESC LIMIT 20")],
-                        "sync_skips_and_errors": [dict(row) for row in db.execute("SELECT * FROM status_events ORDER BY updated_at DESC")],
-                        "verified_compaction": dict(db.execute("SELECT COALESCE(sum(accepted_count),0) AS accepted,COALESCE(sum(rejected_count),0) AS rejected FROM compaction_receipts").fetchone()),
-                        "schema": SCHEMA_VERSION,
-                        "monitor": monitor_info}
         if action == "curation":
             from .curation import curate
             return curate(service, cli_snapshot(service, "curation"), input_fn=input_fn, output=output)
