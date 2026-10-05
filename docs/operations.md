@@ -20,6 +20,31 @@ plugins:
 
 `hermes memory setup`からは通常記憶の自動注入とpassive候補作成を切り替えられます。通常記憶の注入を止めても、既出記憶の訂正通知は維持します。
 
+## HOST_CONTRACT_MISMATCHの調査
+
+このコードだけでは不足モジュール、不足API、変更された引数を判別できません。
+`doctor` の `host_contract.failed_checks` で失敗した検査、import元、必要な引数と実際の引数を確認します。
+依存モジュールが欠けた場合は `missing_module` も表示します。例外本文や認証情報は表示しません。
+`database_ok` はDBの検査結果、トップレベルの `ok` はhost・設定・DBを含む全体の結果です。
+hostが不適合なら、DBが正常でも `ok: false` と終了コード1を返します。
+
+Hermesの実行に使用しているPythonで、Hermesのチェックアウト内から再確認します。
+別ディレクトリでのみ失敗する場合はimport経路の違いです。チェックアウト内でも
+同じAPIが欠ける場合はhostの実際のAPIを確認し、互換性検査を削除して回避しないでください。
+バージョン文字列が一致していてもAPIが一致するとは限りません。
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit
+"$HERMES_PY" -m hermes_kiokuko doctor
+```
+
+未更新のpluginでは詳細な `host_contract` は出ません。修正版の配布物を同じPython環境へ
+インストールしてから確認します。診断のためにDBを削除・再作成する必要はありません。
+過去の `sync_skips_and_errors` の件数は、その発生時刻と一緒に読みます。
+現在のhost互換性エラーの原因とは限りません。
+
 ## TURN_CONTEXT_UNAVAILABLEの調査
 
 `kiokuko_propose`等のツールは、`pre_llm_call`で保存したprofile/session/turnのsnapshotを検証します。snapshotがない場合は`TURN_CONTEXT_UNAVAILABLE`で拒否します。hookの未実行・timeout・先行エラーや、hookとtoolのID不一致が候補です。このエラーだけでは原因を一つに絞れません。別ターンのsnapshotを流用したり、本人確認を省略して保存したりはしません。

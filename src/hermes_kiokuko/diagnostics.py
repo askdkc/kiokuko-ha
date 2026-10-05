@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .compatibility import check_host
+from .compatibility import check_host, host_contract_report
 from .config import read_yaml, load_config
 from .errors import KiokukoError
 from .filesystem import checked_file
@@ -23,6 +23,7 @@ def diagnose(home, *, running=False):
               'delivery_interpretation': 'observed_in_history proves input presence, not answer application',
               'errors': [], 'deliveries': {}, 'candidates': {}, 'operations': {},
               'recent_operations': [], 'recent_deliveries': [], 'sync_skips_and_errors': []}
+    result['host_contract'] = host_contract_report()
     try:
         cfg = read_yaml(home / 'config.yaml')
         result['memory_settings'] = {k: cfg.get('memory', {}).get(k) for k in ('provider', 'memory_enabled', 'user_profile_enabled')}
@@ -54,7 +55,9 @@ def diagnose(home, *, running=False):
             try:
                 view = SimpleNamespace(transaction=lambda: nullcontext(db),
                     config=load_config(home), store=SimpleNamespace(directory=path.parent))
-                result.update(verify(view))
+                database = verify(view)
+                result['database_ok'] = database['ok']
+                result['checksum'] = database['checksum']
                 result['monitor'] = monitor_status(view)
             except (KiokukoError, OSError, sqlite3.Error):
                 result['errors'].append('DIAGNOSTIC_DETAIL_UNAVAILABLE')
@@ -62,4 +65,5 @@ def diagnose(home, *, running=False):
     except (KiokukoError, OSError, sqlite3.Error):
         result['store_ready'] = False
         result['errors'].append('DIAGNOSTIC_STORE_UNAVAILABLE')
+    result['ok'] = bool(result['host_ready'] and result['store_ready'] and result.get('database_ok') and not result['errors'])
     return result

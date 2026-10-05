@@ -22,6 +22,7 @@ profileを指定して初期化します。
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes"
+cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
@@ -35,6 +36,7 @@ export HERMES_HOME="$HOME/.hermes"
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
@@ -57,6 +59,7 @@ v0.1.0からの初回更新や、端末から更新する場合：
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # 実際のprofileパスに合わせる
+cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```

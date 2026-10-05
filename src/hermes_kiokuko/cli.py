@@ -212,7 +212,7 @@ def cli_handler(args):
     try:
         result = execute(args, active_home())
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 1 if isinstance(result, dict) and result.get("error") else 0
+        return 1 if isinstance(result, dict) and (result.get("error") or result.get("ok") is False) else 0
     except (KiokukoError, OSError, ValueError, EOFError) as error:
         print(public_error(error), file=sys.stderr)
         return 1

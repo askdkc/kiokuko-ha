@@ -22,6 +22,7 @@ Initialize the profile:
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes"
+cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
@@ -35,6 +36,7 @@ If you see `active profile is 'main'` together with `Falling back to .../.hermes
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
+cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
@@ -57,6 +59,7 @@ For the first upgrade from v0.1.0, or to update from a terminal:
 ```sh
 HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # Use your actual profile path
+cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
