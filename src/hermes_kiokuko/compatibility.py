@@ -1,8 +1,10 @@
 import hashlib
+import importlib.util
 import inspect
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 from .config import load_config, validate_native
 from .errors import KiokukoError
@@ -22,7 +24,40 @@ AUDITED_DISPATCH_SOURCES = {'0.21.0': {'commit': '13e72fb205b735df679e0fd5f5996a
                       'cli.py': '4a1710806d415804e8eeecb01e49e3c72231bb060d6fe202b84cb3263460ae69'}}}
 
 
+def _prepare_host_imports() -> None:
+    """Expose new root modules omitted by an older Hermes editable mapping.
+
+    Use the installed package's source tree, never CWD or HERMES_HOME. Missing
+    source/dependencies remain errors; we do not supply a replacement YAML API.
+    """
+    try:
+        spec = importlib.util.find_spec('hermes_cli')
+    except (ImportError, ValueError, AttributeError):
+        return
+    if spec is None or not spec.origin:
+        return
+    package = Path(spec.origin).resolve()
+    if package.name != '__init__.py' or package.parent.name != 'hermes_cli':
+        return
+    root = package.parent.parent
+    if str(root) in sys.path:
+        return
+    module = root / 'hermes_yaml.py'
+    if not module.is_file() or module.resolve().parent != root:
+        return
+    try:
+        with (root / 'pyproject.toml').open('rb') as source:
+            project = tomllib.load(source).get('project', {})
+    except (OSError, ValueError):
+        return
+    if not isinstance(project, dict) or project.get('name') != 'hermes-agent':
+        return
+    sys.path.append(str(root))
+    importlib.invalidate_caches()
+
+
 def active_home() -> Path:
+    _prepare_host_imports()
     from hermes_constants import get_hermes_home
     return Path(get_hermes_home()).resolve()
 
@@ -30,6 +65,7 @@ def active_home() -> Path:
 def host_contract_report():
     """Report the exact import/API checks without dumping arbitrary exception text."""
     import importlib
+    _prepare_host_imports()
     modules = {}
     checks = []
     names = ('hermes_cli', 'agent.memory_provider', 'agent.turn_context',

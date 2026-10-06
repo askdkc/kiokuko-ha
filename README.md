@@ -98,6 +98,22 @@ After both `command_registration.ok: true` and the overall `ok: true`, restart t
 
 Check that `/commands` in the chat lists `kiokuko-update`. If terminal registration succeeds but the Gateway still lacks the command, check the serving process's Python, profile, and restart target. If registration fails, inspect its diagnostics and the Gateway startup log for `Failed to load plugin 'kiokuko-tools'`. Older releases without `--load-plugin` need the normal terminal update above before this check. Missing `pip` affects the update after registration; it does not explain `Unknown command`.
 
+### When `hermes_yaml` is missing
+
+`hermes_yaml` is Hermes's own `hermes_yaml.py`, not a Kiokuko dependency. If an editable install created before a Hermes update cannot find new root modules, Kiokuko adds the Hermes source tree belonging to the installed `hermes_cli` to the import path. It does not use files in the working directory or profile as a recovery source.
+
+If loading still fails, check the Python and checkout used to run Hermes.
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+cd "$HOME/.hermes/hermes-agent" || exit 1
+test -f hermes_yaml.py || { echo 'Hermes source is missing hermes_yaml.py'; exit 1; }
+"$HERMES_PY" -c 'import hermes_yaml; from hermes_cli.plugins import get_plugin_commands; print(hermes_yaml.__file__)'
+"$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+```
+
+If Hermes requires this module but the file is absent, repair the missing or inconsistent Hermes source. If the file exists but dependencies such as `ruamel.yaml` are missing, repair them using Hermes's own installation procedure. Kiokuko does not inject an alternative YAML implementation or skip host compatibility checks. After the terminal checks pass, restart the target Gateway and verify commands in chat.
+
 ### Manual wheel installation and recovery
 
 Reinstallation is **not required on every startup**. Use the normal update procedure for published releases. Use this procedure only to install a supplied wheel, including an unpublished fix or a replacement build with the same version. PyPI updates do not include unpublished repository changes.

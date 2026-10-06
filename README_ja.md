@@ -98,6 +98,22 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 
 再起動後、チャットの`/commands`に`kiokuko-update`があるか確認します。端末では登録成功でもGatewayにない場合は、担当プロセスのPython・profile・再起動対象を確認してください。登録検査が失敗した場合はGateway起動ログの`Failed to load plugin 'kiokuko-tools'`と診断結果を確認します。`--load-plugin`が未対応の旧版では、上の通常の端末更新を使ってから再検査してください。`pip`の有無は登録後の更新処理の問題であり、`Unknown command`の原因を説明しません。
 
+### `hermes_yaml` が見つからない場合
+
+`hermes_yaml`はHermes本体の`hermes_yaml.py`です。Kiokukoの依存パッケージではありません。Hermes更新前のeditable installが新しいroot moduleを検索できない場合、Kiokukoはインストール済み`hermes_cli`と同じHermesソースを検索パスへ追加します。作業ディレクトリやprofile内のファイルは復旧元に使いません。
+
+それでも失敗する場合は、Hermesを実行するPythonとチェックアウトを確認します。
+
+```sh
+HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+cd "$HOME/.hermes/hermes-agent" || exit 1
+test -f hermes_yaml.py || { echo 'Hermes source is missing hermes_yaml.py'; exit 1; }
+"$HERMES_PY" -c 'import hermes_yaml; from hermes_cli.plugins import get_plugin_commands; print(hermes_yaml.__file__)'
+"$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+```
+
+Hermes側でこのモジュールを要求しているのにファイルがない場合は、Hermesソースの欠損・更新不整合を復旧する必要があります。ファイルがあるのに`ruamel.yaml`などの依存関係が欠けている場合も、Hermes自身のインストール手順で復旧してください。Kiokukoは代替YAML実装を注入せず、hostの互換性検査も省略しません。端末で成功したら対象Gatewayを再起動し、チャットでコマンドを確認してください。
+
 ### wheelの手動インストールと復旧
 
 **起動のたびに再インストールする必要はありません。** 公開済みのリリースは通常の更新手順を使います。この手順は、受け取ったwheelを入れる場合に使います。未公開の修正版や、同じバージョンの別ビルドを入れ直す場合も含みます。リポジトリ内の未公開変更はPyPIからの更新には入りません。

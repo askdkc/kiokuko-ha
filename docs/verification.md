@@ -103,7 +103,7 @@ wheel導入後の試験（両fixtureと現在のtest依存関係が必要）:
 
 ```sh
 .venv/bin/python -m build --no-isolation
-.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.12-py3-none-any.whl
+.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.13-py3-none-any.whl
 ```
 
 このscriptは使い捨てvenvへローカルwheelを実pipで2回導入し、両hostのregistry・実Gateway
