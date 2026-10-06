@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hermes_kiokuko import provenance
+from hermes_kiokuko import __version__, provenance
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -74,7 +74,7 @@ def test_snapshot_path_is_valid_without_matching_directory_plugin_path(monkeypat
     monkeypatch.setattr(provenance, 'pm_environment', lambda: {
         'checked': True, 'selected_environment': '/generation/.venv',
         'active': True, 'package_in_generation': True})
-    info = provenance.runtime_provenance(SimpleNamespace(path=tmp_path, source='user', version='0.1.16'))
+    info = provenance.runtime_provenance(SimpleNamespace(path=tmp_path, source='user', version=__version__))
     assert info['restart_required'] is False
     assert info['loaded']['origin'] == 'pm_generation'
     assert info['configured_plugin']['path'] != info['loaded']['package_path']
