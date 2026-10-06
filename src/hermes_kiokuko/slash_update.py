@@ -31,9 +31,30 @@ class ManagedSlashUpdate:
         return self.execute(None, raw_args)
 
     def execute(self, home, raw_args):
-        return ("このKiokukoはHermesのプラグイン管理で導入されています。\n"
-                "対象profileの端末で `hermes plugins update kiokuko-tools` を実行し、"
-                "担当Gatewayを再起動してください。\n"
+        import shlex
+        from .provenance import runtime_provenance
+        from .compatibility import active_home
+        home = Path(home) if home is not None else active_home()
+        try:
+            from hermes_constants import profile_name_for_home
+            profile = profile_name_for_home(home)
+        except ImportError:
+            profile = home.name if home.parent.name == 'profiles' else None
+        selector = f' --profile {shlex.quote(profile)}' if profile else ' --profile default'
+        command = f'hermes{selector} plugins update kiokuko-tools'
+        profile = profile or 'custom（端末で対象HERMES_HOMEを明示）'
+        info = runtime_provenance(getattr(self.ctx, 'manifest', None))
+        configured = info['configured_plugin']
+        restart = {True: '必要', False: '現在のPM選択と一致（更新後は再起動してください）',
+                   None: '確認不能（端末でPM状態を確認してください）'}[info['restart_required']]
+        origin = {'pm_generation': 'PM管理環境', 'outside_pm_generation': 'PM管理環境外（不一致）',
+                  'unknown': '確認不能'}[info['loaded']['origin']]
+        status = (f"読込済み: {info['loaded']['version']} / 読込元: {origin}\n"
+                  f"設定上の導入元: {configured['source'] or '確認不能'}\n"
+                  f"設定版: {configured['version'] or '確認不能'} / ディスク版: {configured.get('disk_version') or '確認不能'}\n"
+                  f"コード識別: {str(info['loaded']['fingerprint'] or 'unknown')[:12]}\n再起動: {restart}\n") if raw_args.strip() == 'status' else ''
+        return ("このKiokukoはHermesのプラグイン管理で導入されています。\n" + status +
+                f"対象profile: {profile}\n端末で `{command}` を実行し、担当Gatewayを再起動してください。\n"
                 "管理環境を直接pipで更新する処理は実行しません。")
 
 

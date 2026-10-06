@@ -56,6 +56,23 @@ Git経由で導入済みなら`plugins install`を省き、上の対応する`HE
 
 公式カタログへの掲載は、人間による審査を伴う別の手続きです。現在の掲載・承認は主張していません。旧pip版の自己更新コードも、カタログ規約に沿った別途の確認が必要です。[Hermesのplugin仕様](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/)と[カタログ申請要件](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/)を参照してください。
 
+### PM 導入：`Unknown command` またはモジュール欠落
+
+enabled は設定状態であり、読み込み成功の証明ではありません。Gateway のログに `No module named 'hermes_kiokuko'` がある場合は、まず Hermes 本体のコマンドで確認します。欠落した Kiokuko コマンド自体では復旧できません。`main` の例です。担当環境のランチャーを使ってください。
+
+```sh
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+hermes --profile main plugins list
+hermes --profile main pm status
+hermes --profile main pm doctor
+```
+
+Gateway の起動診断にある Python、prefix、profile、plugin の場所、関係する検索パスを PM の選択環境と照合します。同じ Python 実行ファイルでも、読み込む PM 環境は異なる場合があります。古い venv の doctor 成功が証明するのは、その古いプロセスだけです。
+
+PM が記録済み環境の破損を報告する場合は `hermes --profile main pm repair`、追跡された Git 更新には `hermes --profile main plugins update kiokuko-tools` を使います。エラーを解消してから `hermes --profile main kiokuko doctor --load-plugin` を確認し、担当 Gateway を再起動して Discord の `/commands` と `/kiokuko-update status` を確認します。新しい Gateway でも正常な選択環境を読み込めない場合は、起動時の証拠を Hermes の不具合報告に残します。`src` の強制追加や PM 環境への pip 導入は行いません。
+
+`runtime_provenance` は設定 manifest、現在のディスク版、読み込み済みコードの fingerprint・版、distribution metadata、PM 選択を分けて表示します。PM 情報を取得できない場合は確認不能です。端末診断は常にその端末プロセスを記述します。managed 版のチャット status は、ローカルパスを出さず、短いコード識別と再起動の案内を表示します。版番号の一致だけでは更新反映を証明できません。
+
 ## 旧Hermes用のpip導入（PMのない環境）
 
 以下は、Pythonのvenvを直接管理する旧Hermes用の手順です。現行PMの管理環境には実行しないでください。

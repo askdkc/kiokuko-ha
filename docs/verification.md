@@ -22,7 +22,7 @@ KIOKUKO_HERMES_FIXTURE=current-88c6085 \
   PYTHONPATH="$PWD/src:$PWD/.cache/hermes-current-88c6085" \
   .venv-py314/bin/python -m pytest tests/unit tests/integration tests/hermes_e2e -q
 .venv-py314/bin/python -m build --no-isolation
-.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.14.tar.gz \
+.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.15.tar.gz \
   --host .cache/hermes-current-88c6085
 ```
 
@@ -130,7 +130,7 @@ wheel導入後の試験（両fixtureと現在のtest依存関係が必要）:
 
 ```sh
 .venv/bin/python -m build --no-isolation
-.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.14-py3-none-any.whl
+.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.15-py3-none-any.whl
 ```
 
 このscriptは使い捨てvenvへローカルwheelを実pipで2回導入し、両hostのregistry・実Gateway
@@ -142,3 +142,18 @@ offlineのローカルwheel再導入です。本番PyPIや利用者のHermes環�
 各Hermes suite 224件です。status/helpの非更新、認証否定、envelope盗用/replay、
 cancel後のjob観測とlock解放、CLIの4操作、monitor/research/curationも含みます。
 実PyPI更新、通常startup、実Telegram配送、公開・導入・再起動は未実施です。
+
+## PM 導入と Gateway 読み込みの回帰試験
+
+`runtime_provenance` は読み込み済みコードと現在の PM 選択を照合します。同じ Python・同じ版でも foreign source、旧 generation、同一版のコード変更を区別します。標準ライブラリだけの directory entry 診断は、package 欠落と内部依存欠落を分け、元の例外を再送出します。
+
+```sh
+.venv-py314/bin/python -m build --no-isolation
+.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.15.tar.gz --host .cache/hermes-current-88c6085
+.venv-py314/bin/python scripts/verify_pm_lifecycle.py dist/hermes_kiokuko-0.1.15.tar.gz --host .cache/hermes-current-88c6085
+.venv-py314/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.15-py3-none-any.whl
+```
+
+公開PM試験は使い捨てhomeへhostをコピーし、ローカルGit fixtureを公開install/updateコマンドで導入します。Hermesの通常ランチャー生成APIによる同一コマンドから起動し、bootstrapの環境選択で4 commands・3 tools・provider lifecycleを確認し、同一版更新前からのprocessと再起動後を照合します。無効なTOMLで更新を拒否した際、selection・config・DB・別profileが保持されることも検査します。Kiokukoのsrc/site-packagesを試験から注入しません。初期host依存には呼出元の検証用venvを使い、以降のgenerationはPMが作ります。管理toolchainと依存の取得にはネットワークが必要です。
+
+Gatewayの認証・hook・dispatchは固定hostの別integration試験で検証します。cold boot試験は登録・provider・status handlerまでで、Discordとの接続や外部配送は行いません。実機復旧の証明には担当Gateway再起動後の/commandsと/kiokuko-update statusが別途必要です。リモートCI・公開・本番導入はこの試験に含みません。

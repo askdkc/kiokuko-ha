@@ -184,3 +184,9 @@ process内の重複開始を防ぎ、venv直下の`.kiokuko-update.lock`で別pr
 ## 任意のOrca監視
 
 監視を有効にすると、追加のNode補助プロセスと経験抽出jobが動作します。経験は人間が承認した記憶とは別の未検証区分です。本人・会話・workspaceの境界、元traceと記憶の削除範囲、監視障害時の動作は[API監視と経験記憶](monitoring.ja.md)を参照してください。backupにはtrace本文を含めません。
+
+## PM と Gateway の読み込み不一致
+
+PM 導入の復旧は README_ja.md の「PM 導入：Unknown command またはモジュール欠落」を参照します。まず host の plugins list・pm status・pm doctor を同じ profile で確認します。PM 選択にパッケージがなければ導入・配布物、選択済みなのに旧プロセスなら再起動対象、新規起動でも欠落するなら Hermes activation を切り分けます。内部依存の欠落は PACKAGE_NOT_IMPORTABLE と混同しません。旧 venv を更新しても PM 環境の復旧にはなりません。
+
+起動ログの KIOKUKO_PACKAGE_NOT_IMPORTABLE / KIOKUKO_DEPENDENCY_NOT_IMPORTABLE と runtime_provenance を照合します。端末合格、配布物合格、cold boot 合格、実 Discord 配送の確認を別々に記録してください。実機復旧は、担当 Gateway の再起動後に /commands と /kiokuko-update status が応答するまで未確認です。

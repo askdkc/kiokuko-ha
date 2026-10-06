@@ -11,6 +11,8 @@ def test_runtime_and_plugin_versions_match_release():
     root = Path(__file__).resolve().parents[2]
     project = tomllib.loads((root / 'pyproject.toml').read_text())
     manifest = yaml.safe_load((root / 'src/hermes_kiokuko/plugin.yaml').read_text())
+    native_manifest = yaml.safe_load((root / 'plugin.yaml').read_text())
     release = project['project']['version']
     assert __version__ == release, 'Runtime version would misreport the loaded release'
     assert str(manifest['version']) == release, 'Plugin manifest version is stale'
+    assert str(native_manifest['version']) == release, 'Directory plugin manifest version is stale'

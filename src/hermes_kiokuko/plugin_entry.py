@@ -1,3 +1,4 @@
+from .provenance import runtime_provenance
 from .compatibility import surface_is_compatible_and_selected
 from .plugin_tools import recall_handler, propose_handler, manage_handler
 from .schemas import RECALL_SCHEMA, PROPOSE_SCHEMA, MANAGE_SCHEMA

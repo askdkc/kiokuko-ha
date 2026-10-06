@@ -17,6 +17,7 @@ def command_registration(home):
     expected = ('kioku-curation', 'kiokuko-update', 'kiokuko-monitor', 'kiokuko-research')
     result = {'checked': True, 'process': 'current_process', 'gateway_loaded': None,
               'enabled': False, 'commands': {name: False for name in expected}, 'ok': False}
+    row = None
     try:
         from hermes_constants import get_hermes_home
         if Path(get_hermes_home()).resolve() != Path(home).resolve():
@@ -33,6 +34,10 @@ def command_registration(home):
         result['ok'] = result['enabled'] and all(result['commands'].values()) and not result['load_error_present']
         if not result['ok']:
             result['error'] = 'DIAGNOSTIC_PLUGIN_COMMANDS_UNAVAILABLE'
+        if row is not None:
+            loaded = get_plugin_manager()._plugins.get('kiokuko-tools')
+            from .provenance import runtime_provenance
+            result['runtime_provenance'] = runtime_provenance(getattr(loaded, 'manifest', None))
     except Exception:
         # Host/plugin exceptions can contain configuration values; never serialize them.
         result['error'] = 'DIAGNOSTIC_PLUGIN_LOAD_FAILED'
@@ -50,6 +55,8 @@ def diagnose(home, *, running=False, load_plugin=False):
               'delivery_interpretation': 'observed_in_history proves input presence, not answer application',
               'errors': [], 'deliveries': {}, 'candidates': {}, 'operations': {},
               'recent_operations': [], 'recent_deliveries': [], 'sync_skips_and_errors': []}
+    from .provenance import runtime_provenance
+    result['runtime_provenance'] = runtime_provenance()
     result['host_contract'] = host_contract_report()
     try:
         cfg = read_yaml(home / 'config.yaml')
@@ -70,6 +77,8 @@ def diagnose(home, *, running=False, load_plugin=False):
     result['command_registration'] = {'checked': False, 'gateway_loaded': None}
     if load_plugin and result['host_ready']:
         result['command_registration'] = command_registration(home)
+        if 'runtime_provenance' in result['command_registration']:
+            result['runtime_provenance'] = result['command_registration']['runtime_provenance']
         if not result['command_registration']['ok']:
             result['errors'].append(result['command_registration']['error'])
     path = home / 'kiokuko' / 'kiokuko.db'
@@ -101,5 +110,9 @@ def diagnose(home, *, running=False, load_plugin=False):
     except (KiokukoError, OSError, sqlite3.Error):
         result['store_ready'] = False
         result['errors'].append('DIAGNOSTIC_STORE_UNAVAILABLE')
+    provenance = result['runtime_provenance']
+    pm = provenance['pm_environment']
+    if pm.get('selected_environment') and (pm.get('active') is False or pm.get('package_in_generation') is False):
+        result['errors'].append('DIAGNOSTIC_PM_RUNTIME_MISMATCH')
     result['ok'] = bool(result['host_ready'] and result['store_ready'] and result.get('database_ok') and not result['errors'])
     return result

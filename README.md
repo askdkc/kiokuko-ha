@@ -56,6 +56,23 @@ If Kiokuko is already installed from Git, skip `plugins install` and use `hermes
 
 The official catalog is a separate human-reviewed submission. This repository is not claimed to be catalog-listed or catalog-approved; legacy pip self-update code also requires a separate catalog-policy review. See [Hermes plugin documentation](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/) and [catalog submission requirements](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/).
 
+### PM installation: `Unknown command` or missing module
+
+An enabled plugin is configuration, not proof of loading. If the Gateway logs `No module named 'hermes_kiokuko'`, use host commands first; the missing Kiokuko command cannot repair itself. For `main`, use the launcher belonging to the serving installation:
+
+```sh
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+hermes --profile main plugins list
+hermes --profile main pm status
+hermes --profile main pm doctor
+```
+
+Compare the Gateway startup diagnostic's Python, prefix, profile, plugin path and relevant search paths with the PM selection. The same Python executable can load different PM environments. A successful doctor in an old venv proves only that old process.
+
+If PM reports a damaged recorded environment, use `hermes --profile main pm repair`. For a tracked Git update, use `hermes --profile main plugins update kiokuko-tools`. Check errors before continuing. Then run `hermes --profile main kiokuko doctor --load-plugin`, restart the serving Gateway, and verify `/commands` and `/kiokuko-update status` in Discord. If a fresh Gateway still cannot activate a healthy selected environment, retain the startup evidence for a Hermes issue; do not inject `src` or pip-install into PM generations.
+
+`runtime_provenance` separates the configured manifest, current disk version, loaded code fingerprint/version, distribution metadata and PM selection. Unavailable PM information is unknown. Terminal diagnostics always describe their own process. Managed chat status displays a short loaded fingerprint and restart advice without local paths. Equal version numbers alone do not prove that an update was loaded.
+
 ## Legacy pip installation (Hermes without PM)
 
 The procedures below apply only to older Hermes installations with a directly managed Python venv. Do not use them to modify a current PM-managed environment.

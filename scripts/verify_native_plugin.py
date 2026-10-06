@@ -31,7 +31,7 @@ loaded = manager._plugins['kiokuko-tools']
 assert loaded.enabled and not loaded.error
 assert loaded.manifest.source == 'user', loaded.manifest
 assert set(loaded.tools_registered) == {'kiokuko_recall','kiokuko_propose','kiokuko_manage'}
-assert 'hermes plugins update kiokuko-tools' in manager._plugin_commands['kiokuko-update']['handler'].execute(home, '')
+assert 'plugins update kiokuko-tools' in manager._plugin_commands['kiokuko-update']['handler'].execute(home, '')
 from plugins.memory import find_provider_dir, load_memory_provider
 assert find_provider_dir('kiokuko') is not None
 provider = load_memory_provider('kiokuko')

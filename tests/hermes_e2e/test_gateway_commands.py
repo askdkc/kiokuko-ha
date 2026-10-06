@@ -432,3 +432,21 @@ def test_cancelled_receiver_keeps_update_job_observable_and_unlocks(gateway_comm
         assert len(calls) == 1
         os.close(acquire_lock(tmp_path / '.kiokuko-update.lock', exclusive=True, timeout=0))
     asyncio.run(scenario())
+
+
+def test_managed_status_uses_authorized_gateway_dispatch(gateway_commands):
+    from hermes_kiokuko.slash_update import ManagedSlashUpdate
+    from hermes_kiokuko.gateway_commands import GatewayCommands
+    from hermes_cli.plugins import PluginContext
+    g = gateway_commands
+    loaded = g.manager._plugins['kiokuko-tools']
+    ctx = PluginContext(loaded.manifest, g.manager)
+    update = ManagedSlashUpdate(ctx)
+    g.manager._plugin_commands['kiokuko-update']['handler'] = update
+    # Fixture is a legacy wheel; bind the managed command to the same native hook boundary.
+    gateway_hook = GatewayCommands(ctx, {'kiokuko-update': update})
+    g.manager._hooks['pre_gateway_dispatch'] = [gateway_hook]
+    event, replies = asyncio.run(g.dispatch(g.event('/kiokuko-update status')))
+    assert event is None and len(replies) == 1
+    assert '読込済み' in replies[0][1]
+    assert str(g.home) not in replies[0][1]

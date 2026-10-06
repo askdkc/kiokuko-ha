@@ -48,3 +48,11 @@ def test_default_doctor_does_not_load_plugins(service, monkeypatch):
         raise AssertionError('default doctor must remain read-only')
     monkeypatch.setattr('hermes_kiokuko.diagnostics.command_registration', unexpected)
     assert diagnose(service.store.home)['command_registration'] == {'checked': False, 'gateway_loaded': None}
+
+
+def test_pm_runtime_mismatch_fails_doctor_without_claiming_gateway(service, monkeypatch):
+    monkeypatch.setattr('hermes_kiokuko.provenance.pm_environment', lambda: {
+        'selected_environment': '/selected/venv', 'active': False, 'package_in_generation': False})
+    info = diagnose(service.store.home)
+    assert 'DIAGNOSTIC_PM_RUNTIME_MISMATCH' in info['errors']
+    assert info['ok'] is False and info['gateway_loaded'] is None
