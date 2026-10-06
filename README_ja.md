@@ -14,13 +14,29 @@ Kiokukoの対応範囲はPython 3.11〜3.14、Hermes 0.21系列です。現行PM
 
 CLIやGatewayが使うprofileに合わせて、以下の手順を選んでください。例は標準の`$HOME/.hermes`を使います。独自のrootを使っている場合は、この部分を対象Hermesのrootに置き換えます。`--profile`も明示するため、保存済みのactive profileによってdefault用のコマンドが別profileへ向かうのを防げます。
 
+インストール済みの場合は `hermes plugins update kiokuko-tools` を使います。以下の対象profileの更新用ブロックを選んでください。`plugins install` は初回導入専用です。`Plugin 'kiokuko-tools' already exists` が出た場合も、更新用ブロックを使ってください。
+
 ### defaultプロファイル
 
 defaultの保存先は`$HOME/.hermes`直下です。`profiles/default`ではありません。
 
+初めてインストールする場合：
+
 ```sh
 export HERMES_HOME="$HOME/.hermes"
 hermes --profile default plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+```
+
+既にインストール済みの場合：
+
+```sh
+export HERMES_HOME="$HOME/.hermes"
+hermes --profile default plugins update kiokuko-tools || exit 1
+```
+
+インストールまたは更新後：
+
+```sh
 hermes --profile default kiokuko setup || exit 1
 hermes --profile default kiokuko doctor --load-plugin || exit 1
 ```
@@ -35,9 +51,23 @@ hermes --profile default gateway restart
 
 既存の`main`プロファイルには`$HOME/.hermes/profiles/main`を使います。まだ作成していない場合は、先に`HERMES_HOME="$HOME/.hermes" hermes --profile default profile create main`で作成し、CLIやGatewayの設定を済ませてください。
 
+初めてインストールする場合：
+
 ```sh
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 hermes --profile main plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+```
+
+既にインストール済みの場合：
+
+```sh
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+hermes --profile main plugins update kiokuko-tools || exit 1
+```
+
+インストールまたは更新後：
+
+```sh
 hermes --profile main kiokuko setup || exit 1
 hermes --profile main kiokuko doctor --load-plugin || exit 1
 ```
@@ -52,7 +82,7 @@ hermes --profile main gateway restart
 
 インストール元はGitリポジトリのdefault branchです。Gitを直接指定するため、カタログ掲載は必要ありません。`--yes-deps`は依存関係の導入を明示的に承認する指定です。インストールや依存関係の準備が失敗したら、setupへ進まず先にそのエラーを解消してください。
 
-Git経由で導入済みなら`plugins install`を省き、上の対応する`HERMES_HOME`を指定して、`hermes --profile default plugins update kiokuko-tools`または`hermes --profile main plugins update kiokuko-tools`で更新します。その後、同じprofileのsetup・doctorを実行し、担当Hermesプロセスを再起動してください。手動コピーしたarchiveには更新元のGit情報がないため、Hermesのソース導入手順で置き換える必要があります。native版の`/kiokuko-update`は管理された更新手順を案内し、pipを実行しません。
+手動コピーしたarchiveには更新元のGit情報がないため、Hermesのソース導入手順で置き換える必要があります。native版の`/kiokuko-update`は管理された更新手順を案内し、pipを実行しません。
 
 公式カタログへの掲載は、人間による審査を伴う別の手続きです。現在の掲載・承認は主張していません。旧pip版の自己更新コードも、カタログ規約に沿った別途の確認が必要です。[Hermesのplugin仕様](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/)と[カタログ申請要件](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/)を参照してください。
 

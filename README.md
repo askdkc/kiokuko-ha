@@ -14,13 +14,29 @@ Current Hermes manages plugin code and Python dependencies together. Install dir
 
 Choose the procedure for the profile serving your CLI or Gateway. These examples use the standard `$HOME/.hermes` root. For a custom root, replace that prefix with the root used by your Hermes installation. The explicit `--profile` also prevents a saved active profile from redirecting the default-profile commands.
 
+If Kiokuko is already installed, use `hermes plugins update kiokuko-tools`. Choose the update block below for your profile; `plugins install` is only for a first installation. If you see `Plugin 'kiokuko-tools' already exists`, use the update block.
+
 ### Default profile
 
 The default profile lives directly in `$HOME/.hermes`, not in `profiles/default`:
 
+For a first installation:
+
 ```sh
 export HERMES_HOME="$HOME/.hermes"
 hermes --profile default plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+```
+
+If already installed:
+
+```sh
+export HERMES_HOME="$HOME/.hermes"
+hermes --profile default plugins update kiokuko-tools || exit 1
+```
+
+After installation or update:
+
+```sh
 hermes --profile default kiokuko setup || exit 1
 hermes --profile default kiokuko doctor --load-plugin || exit 1
 ```
@@ -35,9 +51,23 @@ hermes --profile default gateway restart
 
 For an existing profile named `main`, use `$HOME/.hermes/profiles/main`. If it does not exist yet, create it first with `HERMES_HOME="$HOME/.hermes" hermes --profile default profile create main` and configure it for your CLI or Gateway.
 
+For a first installation:
+
 ```sh
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 hermes --profile main plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+```
+
+If already installed:
+
+```sh
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+hermes --profile main plugins update kiokuko-tools || exit 1
+```
+
+After installation or update:
+
+```sh
 hermes --profile main kiokuko setup || exit 1
 hermes --profile main kiokuko doctor --load-plugin || exit 1
 ```
@@ -52,7 +82,7 @@ For either profile, restart an interactive CLI to load the plugin; for a Gateway
 
 The install command follows the Git repository's default branch. This is a custom Git source; catalog listing is not required. `--yes-deps` explicitly approves dependency installation. If installation or dependency preparation fails, resolve that error before running setup.
 
-If Kiokuko is already installed from Git, skip `plugins install` and use `hermes --profile default plugins update kiokuko-tools` or `hermes --profile main plugins update kiokuko-tools` with the corresponding `HERMES_HOME` above. Then run that profile's setup and doctor commands and restart its Hermes process. A manually copied archive has no tracked Git source; it needs replacement through Hermes's source-install procedure. `/kiokuko-update` in native mode gives the managed update instructions and never invokes pip.
+A manually copied archive has no tracked Git source; it needs replacement through Hermes's source-install procedure. `/kiokuko-update` in native mode gives the managed update instructions and never invokes pip.
 
 The official catalog is a separate human-reviewed submission. This repository is not claimed to be catalog-listed or catalog-approved; legacy pip self-update code also requires a separate catalog-policy review. See [Hermes plugin documentation](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/) and [catalog submission requirements](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/).
 
