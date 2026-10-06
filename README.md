@@ -10,33 +10,49 @@ Kiokuko supports Python 3.11–3.14 and Hermes 0.21, including the current PM so
 
 ## Install with current Hermes PM
 
-Current Hermes manages plugin code and Python dependencies together. Use this route for the Python 3.14 Gateway. Installing into an old `venv/bin/python` does not add a PM workspace member. The published 0.1.13 wheel excludes Python 3.14; these instructions require the 0.1.14 source distribution containing the native plugin entry point.
+Current Hermes manages plugin code and Python dependencies together. Install directly from this Git repository; no versioned archive or manual copy is needed. Use the `hermes` launcher belonging to the target Hermes installation. Installing into an old `venv/bin/python` does not add a PM workspace member.
 
-For the supplied, unpublished fix, extract `hermes_kiokuko-0.1.14.tar.gz` on the Gateway machine. Set `PLUGIN_SOURCE` to the extracted directory and `HERMES_HOME` to the profile served by that Gateway. Use the `hermes` launcher belonging to that installation:
+Choose the procedure for the profile serving your CLI or Gateway. These examples use the standard `$HOME/.hermes` root. For a custom root, replace that prefix with the root used by your Hermes installation. The explicit `--profile` also prevents a saved active profile from redirecting the default-profile commands.
 
-```sh
-export HERMES_HOME="/absolute/path/to/target/profile"
-PLUGIN_SOURCE="/absolute/path/to/hermes_kiokuko-0.1.14"
-test -f "$PLUGIN_SOURCE/plugin.yaml" && test -f "$PLUGIN_SOURCE/__init__.py" || exit 1
-test ! -e "$HERMES_HOME/plugins/kiokuko-tools" || { echo 'Existing plugin: use its managed update/replacement procedure'; exit 1; }
-mkdir -p "$HERMES_HOME/plugins"
-cp -R "$PLUGIN_SOURCE" "$HERMES_HOME/plugins/kiokuko-tools"
-hermes plugins enable kiokuko-tools || exit 1
-hermes kiokuko setup
-hermes kiokuko doctor --load-plugin
-```
+### Default profile
 
-Approve dependency preparation when Hermes asks. A failure at `enable` means stop and resolve the PM error before running setup. When doctor reports `ok: true` and command registration succeeds, restart the Gateway serving this profile and check `/commands`. `setup` disables native MEMORY.md/USER.md use and preserves their files and existing Kiokuko data.
-
-Once the repaired source is published, new installations can use:
+The default profile lives directly in `$HOME/.hermes`, not in `profiles/default`:
 
 ```sh
-hermes plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
-hermes kiokuko setup
-hermes kiokuko doctor --load-plugin
+export HERMES_HOME="$HOME/.hermes"
+hermes --profile default plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+hermes --profile default kiokuko setup || exit 1
+hermes --profile default kiokuko doctor --load-plugin || exit 1
 ```
 
-This is a custom Git source; catalog listing is not required. `--yes-deps` explicitly approves dependency installation. Git installations update with `hermes plugins update kiokuko-tools`, then a Gateway restart. An archive copied manually has no tracked Git source; replace it through an approved source-install procedure rather than assuming `plugins update` can fetch it. `/kiokuko-update` in native mode gives the managed update instructions and never invokes pip.
+After doctor reports `ok: true` and `command_registration.ok: true`, restart the Gateway serving this profile:
+
+```sh
+hermes --profile default gateway restart
+```
+
+### Named profile: main
+
+For an existing profile named `main`, use `$HOME/.hermes/profiles/main`. If it does not exist yet, create it first with `HERMES_HOME="$HOME/.hermes" hermes --profile default profile create main` and configure it for your CLI or Gateway.
+
+```sh
+export HERMES_HOME="$HOME/.hermes/profiles/main"
+hermes --profile main plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+hermes --profile main kiokuko setup || exit 1
+hermes --profile main kiokuko doctor --load-plugin || exit 1
+```
+
+After doctor reports `ok: true` and `command_registration.ok: true`, restart the Gateway serving `main`:
+
+```sh
+hermes --profile main gateway restart
+```
+
+For either profile, restart an interactive CLI to load the plugin; for a Gateway, check `/commands` in its chat after the restart. Terminal doctor does not prove that the running Gateway loaded the plugin. `setup` disables native MEMORY.md/USER.md use and preserves their files and existing Kiokuko data.
+
+The install command follows the Git repository's default branch. This is a custom Git source; catalog listing is not required. `--yes-deps` explicitly approves dependency installation. If installation or dependency preparation fails, resolve that error before running setup.
+
+If Kiokuko is already installed from Git, skip `plugins install` and use `hermes --profile default plugins update kiokuko-tools` or `hermes --profile main plugins update kiokuko-tools` with the corresponding `HERMES_HOME` above. Then run that profile's setup and doctor commands and restart its Hermes process. A manually copied archive has no tracked Git source; it needs replacement through Hermes's source-install procedure. `/kiokuko-update` in native mode gives the managed update instructions and never invokes pip.
 
 The official catalog is a separate human-reviewed submission. This repository is not claimed to be catalog-listed or catalog-approved; legacy pip self-update code also requires a separate catalog-policy review. See [Hermes plugin documentation](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/) and [catalog submission requirements](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/).
 
@@ -86,6 +102,10 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 `HERMES_HOME` defines the profile boundary. Use the same value that Hermes uses to start the target profile; each profile has separate configuration, database, and sessions.
 
 ## Update
+
+For current PM installations, use the profile-specific `plugins update` procedure in [Install with current Hermes PM](#install-with-current-hermes-pm).
+
+### Legacy pip update (Hermes without PM)
 
 After the Kiokuko command plugin has loaded, run these commands in the interactive Hermes CLI or a Gateway chat such as Discord or Telegram:
 
