@@ -6,14 +6,52 @@ Kiokuko(記憶庫)はHermes Agent用の記憶pluginです。本人・会話・wo
 
 compact時と会話終了時には、プロジェクト内のファイルや設定で再確認できる項目だけを検証済み記憶として保存します。保存先は`$HERMES_HOME/kiokuko/kiokuko.db`です。
 
-対応環境はPython 3.11〜3.13、Hermes 0.21系列です。
+Kiokukoの対応範囲はPython 3.11〜3.14、Hermes 0.21系列です。現行PMのソース契約は`88c60858468d7adee27a752242c7c507fa4129d0`で検証します。Python 3.14ではHermes 0.21.4以降が必要です。それ以前のhostは記憶同期に使うスレッド処理が3.14に対応していません。
 
-## インストール
+## 現行HermesのPMで導入する
 
-Hermesと同じPython環境へPyPIからインストールします。標準インストールの例です。
+現行HermesはpluginのコードとPython依存関係をまとめて管理します。Python 3.14で動くGatewayには、この経路で導入してください。旧`venv/bin/python`へのインストールではPMの管理対象になりません。公開済み0.1.13のwheelはPython 3.14を除外しています。以下はnative pluginの入口を含む0.1.14のソース配布物用です。
+
+未公開の修正版を使う場合は、Gatewayのマシンで`hermes_kiokuko-0.1.14.tar.gz`を展開します。`PLUGIN_SOURCE`には展開先、`HERMES_HOME`には担当Gatewayのprofileを指定してください。`hermes`は、そのHermesインストールのランチャーを使います。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="/absolute/path/to/target/profile"
+PLUGIN_SOURCE="/absolute/path/to/hermes_kiokuko-0.1.14"
+test -f "$PLUGIN_SOURCE/plugin.yaml" && test -f "$PLUGIN_SOURCE/__init__.py" || exit 1
+test ! -e "$HERMES_HOME/plugins/kiokuko-tools" || { echo '既存pluginがあります。管理された更新・置換手順を使ってください'; exit 1; }
+mkdir -p "$HERMES_HOME/plugins"
+cp -R "$PLUGIN_SOURCE" "$HERMES_HOME/plugins/kiokuko-tools"
+hermes plugins enable kiokuko-tools || exit 1
+hermes kiokuko setup
+hermes kiokuko doctor --load-plugin
+```
+
+Hermesが依存関係の準備を確認したら承認します。`enable`が失敗した場合はsetupへ進まず、PMのエラーを解消してください。doctorの`ok: true`とコマンド登録の成功を確認してから、そのprofileのGatewayを再起動し、チャットの`/commands`を確認します。`setup`はnativeのMEMORY.md・USER.mdを無効にしますが、既存ファイルやKiokukoの記憶は保持します。
+
+修正版のソース公開後は、新規導入に次を使えます。
+
+```sh
+hermes plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+hermes kiokuko setup
+hermes kiokuko doctor --load-plugin
+```
+
+これはGitリポジトリを指定した導入なので、カタログ掲載は必要ありません。`--yes-deps`は依存関係の導入を明示的に承認する指定です。Git経由の更新には`hermes plugins update kiokuko-tools`を使い、担当Gatewayを再起動します。手動でコピーしたarchiveには更新元のGit情報がないため、このコマンドで取得できるとは限りません。配布元を確認したうえで導入・置換してください。native版の`/kiokuko-update`は管理された更新手順を案内し、pipを実行しません。
+
+公式カタログへの掲載は、人間による審査を伴う別の手続きです。現在の掲載・承認は主張していません。旧pip版の自己更新コードも、カタログ規約に沿った別途の確認が必要です。[Hermesのplugin仕様](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/)と[カタログ申請要件](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/)を参照してください。
+
+## 旧Hermes用のpip導入（PMのない環境）
+
+以下は、Pythonのvenvを直接管理する旧Hermes用の手順です。現行PMの管理環境には実行しないでください。
+
+
+対象Hermesプロセスを実際に起動しているPython環境へインストールします。Gatewayのチャットで使う場合は、そのGatewayの起動コマンドやサービス設定で指定されたPythonを使い、venv内のパスを保持してください。`$HOME/.hermes/hermes-agent/venv/bin/python`を使えるのはGatewayもそのPythonで動く場合だけです。そこへインストールしても、別のPythonで動くGatewayには反映されません。
+
+以下のパスを実際のPythonに置き換え、パスとバージョンを確認してからインストールします。
+
+```sh
+export HERMES_PY="/absolute/path/to/gateway/python"
+"$HERMES_PY" -c 'import sys; print(sys.executable); print(sys.version)'
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
 else
@@ -24,7 +62,7 @@ fi
 profileを指定して初期化します。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
@@ -38,7 +76,7 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 `active profile is 'main'` と表示されながら、`Falling back to .../.hermes` と警告された場合、対象profileを明示してから再実行します。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
@@ -63,7 +101,7 @@ Hermesを実行しているPythonを使い、現在のprofileを`HERMES_HOME`で
 v0.1.0からの初回更新や、端末から更新する場合：
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # 実際のprofileパスに合わせる
 cd "$HOME/.hermes/hermes-agent" || exit 1
 if command -v uv >/dev/null 2>&1; then
@@ -74,14 +112,14 @@ fi
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
-更新完了を確認してからHermesプロセスを再起動します。Telegram・Discordで使う場合は、そのチャットを担当するHermes Gatewayプロセスを再起動してください。新しい会話セッションだけではpluginコードが再読込されません。OSの再起動は不要です。Python 3.14は現在の対応範囲外です。
+更新完了を確認してからHermesプロセスを再起動します。Telegram・Discordで使う場合は、そのチャットを担当するHermes Gatewayプロセスを再起動してください。新しい会話セッションだけではpluginコードが再読込されません。OSの再起動は不要です。サービスでGatewayを管理している場合は、サービスの起動Pythonも確認してください。別のPythonから端末で再起動しても、サービス設定のPythonは変わりません。
 
 ### `/kiokuko-update` が `Unknown command` になる場合
 
 そのGatewayにはコマンドが登録されていません。未登録の更新コマンドでは復旧できないため、まず端末で同じPython・profileの設定と登録を確認します。`main`の例です。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
@@ -105,7 +143,7 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 それでも失敗する場合は、Hermesを実行するPythonとチェックアウトを確認します。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 test -f hermes_yaml.py || { echo 'Hermes source is missing hermes_yaml.py'; exit 1; }
 "$HERMES_PY" -c 'import hermes_yaml; from hermes_cli.plugins import get_plugin_commands; print(hermes_yaml.__file__)'
@@ -121,7 +159,7 @@ Hermes側でこのモジュールを要求しているのにファイルがな�
 Hermesが動くマシンへwheelを転送し、`WHEEL`を実際のファイルパスに合わせてください。下の`VERSION`は受け取ったファイル名のバージョンに置き換えます。`HERMES_HOME`は対象profileに合わせます。`--no-deps`は、そのHermes環境にKiokukoの依存パッケージが既に入っている前提です。初回インストールで依存パッケージも必要なら、このオプションを外してください。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 
@@ -151,7 +189,7 @@ fi
 モデルが提案した記憶や自由な自然文の「覚えて」は候補になります。候補の確認と承認はCLIで行います。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko pending
 "$HERMES_PY" -m hermes_kiokuko approve CANDIDATE_ID
 ```
@@ -170,7 +208,7 @@ v0.1.1以降は、対象プロジェクトで起動したHermesの対話CLI内�
 `CODE`は`share`後に表示される確認コードに置き換えます。`cancel`で共有せず終了します。Global記憶は同じprofileの全利用者・全プロジェクトへ共有されます。GatewayのDM・groupではこの管理操作を実行できないため、ローカルの対話CLIを使ってください。端末コマンドも引き続き利用できます。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko curation
 # venvのbinディレクトリがPATHにある場合:
 kioku-curation

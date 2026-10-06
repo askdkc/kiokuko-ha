@@ -1,3 +1,5 @@
+現行HermesのPM環境では[READMEのnative導入手順](../README_ja.md#現行hermesのpmで導入する)を使います。この文書の直接pip更新は旧Hermes専用です。PM環境の更新は`hermes plugins update kiokuko-tools`で行います。
+
 # 運用と境界
 
 ## 設定と互換性
@@ -14,7 +16,7 @@ Hermesの移行処理は`find_provider_dir()`でインストール済みかを�
 既存DBの削除や`memory.provider`の変更は必要ありません。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" - <<'PY'
@@ -61,7 +63,7 @@ Hermesの実行に使用しているPythonで、Hermesのチェックアウト�
 バージョン文字列が一致していてもAPIが一致するとは限りません。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit
 "$HERMES_PY" -m hermes_kiokuko doctor
@@ -79,7 +81,7 @@ cd "$HOME/.hermes/hermes-agent" || exit
 稼働Gatewayと同じPythonとprofileを指定して確認します。次の例は`main`用です。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 "$HERMES_PY" -c 'from importlib.metadata import version; import hermes_cli; print("hermes-kiokuko:", version("hermes-kiokuko")); print("Hermes:", hermes_cli.__version__)'
 "$HERMES_PY" -m hermes_kiokuko doctor
@@ -101,7 +103,7 @@ export HERMES_HOME="$HOME/.hermes/profiles/main"
 修正版パッケージのインストール後、担当Gatewayを再起動して連続ターンを確認します。`main`の例です。
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 "$HERMES_PY" -m hermes_cli.main --profile main gateway restart
 "$HERMES_PY" -m hermes_kiokuko status

@@ -17,6 +17,26 @@ _lock = threading.Lock()
 _job = None
 
 
+class ManagedSlashUpdate:
+    """Keep updates of a directory plugin under Hermes PM's transaction."""
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+
+    def __call__(self, raw_args):
+        from .gateway_commands import dispatch
+        routed = dispatch(self.ctx, "kiokuko-update", raw_args)
+        if routed is not None:
+            return routed
+        return self.execute(None, raw_args)
+
+    def execute(self, home, raw_args):
+        return ("このKiokukoはHermesのプラグイン管理で導入されています。\n"
+                "対象profileの端末で `hermes plugins update kiokuko-tools` を実行し、"
+                "担当Gatewayを再起動してください。\n"
+                "管理環境を直接pipで更新する処理は実行しません。")
+
+
 @dataclass
 class UpdateJob:
     home: Path

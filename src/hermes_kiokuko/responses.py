@@ -31,6 +31,10 @@ def extract_response(client, model, kwargs, *, metrics=None):
     bounded = client._real_client.with_options(timeout=10, max_retries=0)
     adapter = _CodexCompletionsAdapter(bounded, model)
     request, _, _ = adapter._build_responses_kwargs({**kwargs, 'timeout': 10})
+    # Current Hermes returns route/alias bookkeeping alongside SDK kwargs.
+    # This text-only extraction does not consume tool calls or issuer metadata.
+    request.pop('_wire_aliases', None)
+    request.pop('_issuer_kind', None)
     # Hermes otherwise extends its deadline while tokens arrive. This extraction
     # keeps a fixed ceiling, inside the job's existing 12-second commit deadline.
     with aux_stream_deadline(time.monotonic() + 10):

@@ -80,6 +80,52 @@
         "gateway/platforms/base.py": "eebe8073d62e35ed69e3716f362edaae0d5aeab07c7528b86e2233f8f5c105dd",
         "agent/sdk_transform_bypass.py": "6887046105bd5e666631aa9a0d0a81488392ba8978ede650ae4e31abc36ccbd6"
       }
+    },
+    "current-88c6085": {
+      "repository": "NousResearch/hermes-agent",
+      "commit": "88c60858468d7adee27a752242c7c507fa4129d0",
+      "archive_url": "https://codeload.github.com/NousResearch/hermes-agent/tar.gz/88c60858468d7adee27a752242c7c507fa4129d0",
+      "archive_sha256": "6d68ee240bb081faddeb2c073e00c686dd7e9d5469136d73189421ec8636bdd5",
+      "files": {
+        "agent/agent_init.py": "6c94abccb46c52b6e92123c01e1fda32c69f946d2923785f05106c3ca78d8195",
+        "agent/auxiliary_client.py": "697e60f276126e963b8760b20e7609d944902eccd16670e22e972886ef661035",
+        "agent/chat_completion_helpers.py": "15c2aa0e7863495546ad1bbaf8ad9c67de12fdbc65f10b91c7f51a210d0a5214",
+        "agent/codex_responses_adapter.py": "bb26bc4ea2da448cfe784a0235671c4d42c2b9ed42198414d8cb3826679c2916",
+        "agent/codex_runtime.py": "ad526708006ac876946681d3bc836e27aac28f0ce0806a48fc9ae94f9d1d41ab",
+        "agent/conversation_compression.py": "91ddefda0b799eb7c5f6ef4b0ce51d6a73a39ae35323400447201e9051d8d477",
+        "agent/inline_tool_executors.py": "e5ccd18e191c52033801329c1c936adbaf2ee119baad646ccd3ac3f72b1b50e2",
+        "agent/memory_manager.py": "048842c1c3725e6fe6aef8f2b7fe3ea06baec02cebdea1e9ab0e9da06473930d",
+        "agent/memory_provider.py": "a4e44a293013fff831ac136ab77c556541cd18817f53bd662e97090cd80bd5a6",
+        "agent/model_metadata.py": "051d4dde2d4e92aa6f96411df37b7ee25b9308f881be5bbaa4810cd02fd532e0",
+        "agent/runtime_cwd.py": "09ae9418fe2eedd7f70e880737fa8307475a42a4492c098aef3005b1bdfee0c0",
+        "agent/sdk_transform_bypass.py": "6887046105bd5e666631aa9a0d0a81488392ba8978ede650ae4e31abc36ccbd6",
+        "agent/tool_executor.py": "c2c65ba2d5d0847f968321e0438f2dd3c87973cb2680acb5cd52192f48b602ab",
+        "agent/transports/codex.py": "60e0bce12901552186e374ab48a5a7c39b06ac22cdc450290a03b3e652bb83c1",
+        "agent/turn_api_call.py": "a059a5f6a8b75d1c8242d59fbc1500adb86e2ec8d57a97660c0f25e35d5dc9b2",
+        "agent/turn_api_request.py": "fae43abf285e6f2b82d1820b7bd62ee10214676a48d6af552b8d62530e59dd15",
+        "agent/turn_context.py": "1db15cc5ee39ab3dafe9f646680f8468dd2bd6401bf4123e891697bf8206efba",
+        "agent/turn_response_intake.py": "ab98da48e437f23ac81c3e9c83309d50d5d0b1200712990fce85c419d315efe9",
+        "cli.py": "6b2e8cff0bcf6ef6236d388dac7d641e21691a7a0b3c8e1177791f0a3ade18a7",
+        "gateway/hooks.py": "07c0fcbb5e07aa4b853adbf21982bc8a0b7e29c32707c10c6ab04b62e1746a7d",
+        "gateway/platforms/base.py": "015b34fcef10fec1ba5632325e51c601a0f3277b06cb19e9380baf64ed73e1db",
+        "gateway/run.py": "17d8c63295241dd6de6ca430d41684374a330582dcbaaa2b91040354ad53222e",
+        "gateway/run_busy.py": "e4baf0d89c3d035660be743543fc0504348619d17d7df2ddb28dfe066b666ddb",
+        "gateway/run_inbound.py": "baed959927ffe88d75452bb0561703579ebd26cf4b06e0f2f0a2ea74bcc3cc32",
+        "gateway/session.py": "921e579363945f15972355a7b454df6bf8c385d50d3a88854a46f31abeffea01",
+        "gateway/session_context.py": "76cb6383168db1c6fd8f70f963e1436b101a9f810f13724cd812bf57a777dbe2",
+        "gateway/slash_access.py": "af59bc85f629a54c5e488e7d18c8ae962c6e8f086d009643aaae0f2afc12a73b",
+        "hermes_cli/__init__.py": "6a4ab05b8621ec1cd66a5abbe30fa32ed5bddddea95903036da01f0af1af94ce",
+        "hermes_cli/cli_tui_mixin.py": "504c2b645c7f201e5a19e0426e8048327b8aa1319ba7564e2e41123fe4099725",
+        "hermes_cli/middleware.py": "460768d9b40ed2cc3b81e9344119e1e5a7690e430af6dcff2707481af26c0c5b",
+        "hermes_cli/plugins.py": "b0f09d0004890ff0b2c07d17ee7c5688709162da4fd43d404cabbe13f1d9f59d",
+        "hermes_cli/plugins_dispatch.py": "611405313bb42b84a9a4514cbe906105b5c9bb96962f9d04acae0c12691cf484",
+        "hermes_cli/plugins_loader.py": "072fe348e2c2a5cfbda59ea09620a68b53a1a0b3c43ac74229a500a9b5c696d1",
+        "hermes_cli/version_info.py": "c2949d704fc2423f018e3e581ace316c2ad543fbd932e97d415cdaa0e52339ec",
+        "model_tools.py": "ba97dd616fac870af2fb21823fb0e18f71ca4444abffd8361fa9a05f02518b30",
+        "plugins/memory/__init__.py": "83634f6a290c407bc4a25cf8c34f63ea58ae890f3ef9f84d561d90be9f93c0b3",
+        "pm/plugin_declarations.py": "a487ca6db1cdfab3fe570911b66e7bd136eb3208d4337dbedc9ded2b8eb15d01",
+        "pm/workspace.py": "cc38dda0aafdd8f9790930967134164ce50922c8f5697d0a99571b29a01c3d06"
+      }
     }
   }
 }

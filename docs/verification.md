@@ -2,7 +2,33 @@
 
 2026-09-09時点。Orca監視・経験記憶とCodex Responses対応を含むコードを固定Hermesで検証済みです。release用の全環境matrixは未完了です。
 
-## 実行環境と結果
+## 2026-10-06：Python 3.14と現行PMの検証
+
+- Python 3.14.7 + 現行Hermes `88c60858468d7adee27a752242c7c507fa4129d0`：unit/SQLite integration 357件、Hermes integration 224件、計581件成功。Gateway側の非推奨API警告80件あり。
+- Python 3.12.13 + Hermes 0.21.0：同じ581件成功。
+- 0.1.14のnativeソース配布物を、現行Hermes PMの実`lock_and_sync`と`PythonEnvironment`で新しいworkspaceへビルド・導入。依存関係を実際に解決し、`pip check`相当の整合性検査、user directory discovery、3 tools、managed更新案内、MemoryProviderのinitialize/shutdown、Hermes `doctor_plugin`と`validate_plugin_dir`を通過。uvエンジンには明示したローカル実行ファイルを使い、Hermes本体のtoolchain取得・本番selectionの切替は試験していません。
+- 配布元と同じ追跡対象ファイル＋追加ファイルのsnapshotは、現行Hermes Plugin Guardで`safe`。防御用正規表現の拒否動作も保持。
+- Python 3.14のwheel実導入・再導入：0.21.0を起動時に拒否し、0.21.4のregistryとGateway/CLI更新経路は成功。更新jobは模擬で、wheel導入自体は実pipのoffline導入。
+
+現在のHermesは`__version__`が0.0.0でもcanonicalな`get_version_info()`にrelease identityを持つ場合があるため、そちらを確認します。stampもGit情報もない0.0.0は、上記固定ソースのfingerprintとPython 3.14が一致する場合だけ許可します。別の未知sourceを一律許可しません。
+
+native版はPMへ更新を委ねます。旧pip用の自己更新は保持しているため、導入検査の合格を公式カタログ規約の承認とは扱いません。GitHubへのpush、PyPI公開、公式カタログ掲載、利用者Gatewayへの導入・再起動・実ネットワーク配送は未実施です。このリポジトリにGitHub Actionsの検証workflowはなく、リモートCI成功は主張しません。
+
+再実行（現行hostとその依存関係を用意し、localhost待受を許可した環境）：
+
+```sh
+.venv-py314/bin/python scripts/fetch_hermes_fixture.py --fixture current-88c6085
+KIOKUKO_HERMES_FIXTURE=current-88c6085 \
+  PYTHONPATH="$PWD/src:$PWD/.cache/hermes-current-88c6085" \
+  .venv-py314/bin/python -m pytest tests/unit tests/integration tests/hermes_e2e -q
+.venv-py314/bin/python -m build --no-isolation
+.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.14.tar.gz \
+  --host .cache/hermes-current-88c6085
+```
+
+native検証scriptは`.cache`内の使い捨てprofileとworkspaceだけを使います。PM fixtureの呼出元には`tomli-w`等の現行PM依存関係とPython 3.14、実uvが必要です。ネットワークが必要なのは依存関係の解決・取得で、実LLMやGatewayの外部送信は使いません。
+
+## 過去の実行環境と結果
 
 | 環境 | 対象 | 結果 |
 |---|---|---|
@@ -92,7 +118,8 @@ Hermes 0.21.4で移動したSDK変換helperは新moduleから取得し、0.21.0�
 
 doctorのhost_contract.okはimport/API検査の結果です。dispatch_contractは固定ソースの
 fingerprint一致を別に示します。runtime_exercised=falseのため、doctorだけで実Gateway配送が
-成功したとは判断できません。未検証sourceはunverified、0.0.0とPython 3.14は従来どおり未対応です。
+成功したとは判断できません。未検証sourceはunverifiedです。0.0.0の扱いは上記の現行PM検証に記載しています。
+Pythonの対応範囲は3.11〜3.14です。3.14ではHermes 0.21.4以降が必要です。0.21.0のDaemonThreadPoolExecutorは削除された_initializer/_initargsを参照し、記憶同期に失敗するため起動時に拒否します。3.15以降はpackage metadataと起動時検査の両方で拒否します。
 
 両hostを別processで実行します。archive/source checksum不一致は失敗とし、module cacheを
 混在させません。localhost模擬HTTP serverを使うsuiteにはloopback listenerの許可が必要です。
@@ -103,7 +130,7 @@ wheel導入後の試験（両fixtureと現在のtest依存関係が必要）:
 
 ```sh
 .venv/bin/python -m build --no-isolation
-.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.13-py3-none-any.whl
+.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.14-py3-none-any.whl
 ```
 
 このscriptは使い捨てvenvへローカルwheelを実pipで2回導入し、両hostのregistry・実Gateway
@@ -111,7 +138,7 @@ dispatch・CLI process_commandを検査します。Gatewayからのpip更新は�
 offlineのローカルwheel再導入です。本番PyPIや利用者のHermes環境にはアクセスしません。
 
 2026-10-06の修正前再現では、0.21.4の実Gateway update/statusとexecutor→元taskの試験が
-3 platformで失敗（6件）しました。修正後の最終件数はunit/integration 331件、
+3 platformで失敗（6件）しました。初回修正後の件数はunit/integration 331件、
 各Hermes suite 224件です。status/helpの非更新、認証否定、envelope盗用/replay、
 cancel後のjob観測とlock解放、CLIの4操作、monitor/research/curationも含みます。
 実PyPI更新、通常startup、実Telegram配送、公開・導入・再起動は未実施です。

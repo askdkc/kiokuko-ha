@@ -80,7 +80,11 @@ def codex_http(host, monkeypatch):
     url = f'http://127.0.0.1:{server.server_port}/v1'
     from agent import auxiliary_client
     monkeypatch.setattr(auxiliary_client, '_select_pool_entry', lambda provider: (False, None))
-    monkeypatch.setattr(auxiliary_client, '_read_codex_access_token', lambda: 'local-test')
+    # Current Hermes pairs credentials with their route; older pinned hosts use
+    # the previous token reader. Replace only the actual reader, never auth files.
+    token_reader = ('_read_codex_singleton_token' if hasattr(auxiliary_client, '_read_codex_singleton_token')
+                    else '_read_codex_access_token')
+    monkeypatch.setattr(auxiliary_client, token_reader, lambda: 'local-test')
     monkeypatch.setattr(auxiliary_client, '_CODEX_AUX_BASE_URL', url)
     import requests as requests_module
     monkeypatch.setattr(requests_module.sessions.Session, 'request',

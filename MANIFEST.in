@@ -6,4 +6,5 @@ recursive-include tests *.json
 recursive-include src/hermes_kiokuko/orca *
 recursive-include benchmarks *.py *.json
 include setup.py
+include __init__.py plugin.yaml
 recursive-include skills *.md

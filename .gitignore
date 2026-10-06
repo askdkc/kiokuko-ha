@@ -1,5 +1,6 @@
 PLAN.md
 .venv/
+.venv-py314/
 .cache/
 .pytest_cache/
 __pycache__/

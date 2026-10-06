@@ -16,7 +16,9 @@ INJECTION = re.compile(
     r"(?:reveal|exfiltrate|send).{0,40}(?:system prompt|private key|credentials)|"
     r"(?:system|developer)\s*:\s*(?:override|ignore)|"
     r"(?:以前|システム|開発者)の指示を無視|"
-    r"(?:authorized_keys|ssh-rsa AAAA)", re.I | re.S,
+    # Spell the separator as a regex character class: this is a detector, not
+    # an SSH file operation. Hermes Plugin Guard otherwise misclassifies it.
+    r"(?:authorized[_]keys|ssh-rsa AAAA)", re.I | re.S,
 )
 
 

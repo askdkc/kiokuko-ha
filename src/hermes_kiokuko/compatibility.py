@@ -24,6 +24,8 @@ AUDITED_DISPATCH_SOURCES = {'0.21.0': {'commit': '13e72fb205b735df679e0fd5f5996a
                       'cli.py': '4a1710806d415804e8eeecb01e49e3c72231bb060d6fe202b84cb3263460ae69'}}}
 
 
+AUDITED_DISPATCH_SOURCES["0.0.0"] = {'commit': '88c60858468d7adee27a752242c7c507fa4129d0', 'files': {'gateway/run_inbound.py': 'baed959927ffe88d75452bb0561703579ebd26cf4b06e0f2f0a2ea74bcc3cc32', 'gateway/run.py': '17d8c63295241dd6de6ca430d41684374a330582dcbaaa2b91040354ad53222e', 'hermes_cli/plugins.py': 'b0f09d0004890ff0b2c07d17ee7c5688709162da4fd43d404cabbe13f1d9f59d', 'cli.py': '6b2e8cff0bcf6ef6236d388dac7d641e21691a7a0b3c8e1177791f0a3ade18a7', 'hermes_cli/version_info.py': 'c2949d704fc2423f018e3e581ace316c2ad543fbd932e97d415cdaa0e52339ec', 'pm/plugin_declarations.py': 'a487ca6db1cdfab3fe570911b66e7bd136eb3208d4337dbedc9ded2b8eb15d01', 'pm/workspace.py': 'cc38dda0aafdd8f9790930967134164ce50922c8f5697d0a99571b29a01c3d06'}}
+
 def _prepare_host_imports() -> None:
     """Expose new root modules omitted by an older Hermes editable mapping.
 
@@ -85,8 +87,21 @@ def host_contract_report():
                 detail['missing_module'] = missing
             checks.append(detail)
     version = getattr(modules.get('hermes_cli'), '__version__', None)
-    supported = (isinstance(version, str) and bool(re.fullmatch(r"0\.21\.\d+(?:[-+][\w.]+)?", version))
-                 and (3, 11) <= sys.version_info[:2] < (3, 14))
+    if version == '0.0.0':
+        try:
+            identity = importlib.import_module('hermes_cli.version_info').get_version_info()
+            if identity.base_version != 'unknown':
+                version = identity.base_version
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError):
+            pass
+    dispatch = dispatch_contract_report(modules.get('hermes_cli'), version)
+    version_match = re.fullmatch(r"0\.21\.(\d+)(?:[-+][\w.]+)?", version) if isinstance(version, str) else None
+    # Earlier hosts use CPython's pre-3.14 private executor API and lose sync jobs.
+    supported = (bool(version_match) and (3, 11) <= sys.version_info[:2] < (3, 15)
+                 and (sys.version_info[:2] < (3, 14) or int(version_match[1]) >= 4))
+    if version == '0.0.0':
+        supported = (sys.version_info[:2] == (3, 14)
+                     and dispatch['status'] == 'tested_fixture_source_match')
     checks.append({'name': 'supported_version', 'ok': bool(supported),
                    'hermes_version': version, 'python_version': list(sys.version_info[:2])})
     contracts = [
@@ -123,7 +138,7 @@ def host_contract_report():
     return {'ok': not failed, 'error': code, 'hermes_version': version,
             'checks': checks, 'failed_checks': failed,
             'scope': 'import_and_api_checks',
-            'dispatch_contract': dispatch_contract_report(modules.get('hermes_cli'), version)}
+            'dispatch_contract': dispatch}
 
 
 def check_host(home: Path | None = None, *, require_config=True) -> None:

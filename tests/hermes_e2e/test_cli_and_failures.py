@@ -170,6 +170,7 @@ def test_hook_timeout_skip_and_late_completion_stays_prepared(host, monkeypatch)
 def test_version_and_native_gate_cover_tools_and_provider(host, monkeypatch):
     home, _ = host
     import hermes_cli
+    host_version = hermes_cli.__version__
     from hermes_kiokuko.provider import KiokukoMemoryProvider
     from hermes_kiokuko.compatibility import check_host, surface_is_compatible_and_selected
     from hermes_kiokuko.errors import KiokukoError
@@ -178,7 +179,7 @@ def test_version_and_native_gate_cover_tools_and_provider(host, monkeypatch):
         monkeypatch.setattr(hermes_cli, "__version__", version)
         assert not surface_is_compatible_and_selected()
         assert not KiokukoMemoryProvider().is_available()
-    monkeypatch.setattr(hermes_cli, "__version__", "0.21.0")
+    monkeypatch.setattr(hermes_cli, "__version__", host_version)
     cfg = read_yaml(home / "config.yaml")
     cfg["memory"]["user_profile_enabled"] = True
     write_yaml(home / "config.yaml", cfg)

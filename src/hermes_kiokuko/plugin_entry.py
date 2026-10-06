@@ -5,7 +5,7 @@ from .tool_context import tool_execution_middleware
 from .turn_hook import pre_llm_call
 
 
-def register(ctx):
+def register(ctx, *, managed=False):
     from .bundled_skills import register as register_skills
     register_skills(ctx)
     from .cli import setup_parser, cli_handler
@@ -28,8 +28,8 @@ def register(ctx):
     ctx.register_command("kioku-curation", SlashCuration(ctx),
                          description="検証済み記憶の選択・Global共有（対話CLI）",
                          args_hint="[show|select 1 3|all|none|share|confirm CODE|cancel|help]")
-    from .slash_update import SlashUpdate
-    update = SlashUpdate(ctx)
+    from .slash_update import ManagedSlashUpdate, SlashUpdate
+    update = (ManagedSlashUpdate if managed else SlashUpdate)(ctx)
     ctx.register_command("kiokuko-update", update,
                          description="現在のHermes用Python環境のKiokukoを更新",
                          args_hint="[status|retry|help]")

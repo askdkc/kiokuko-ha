@@ -45,6 +45,23 @@ with pytest.MonkeyPatch.context() as patch:
 print('PASS: installed wheel entrypoints, registry, real Gateway/CLI update/status/help/retry; mock jobs')
 """
 
+UNSUPPORTED_SMOKE = """
+import sys
+from pathlib import Path
+sys.path.extend(sys.argv[1:4])
+import hermes_kiokuko
+assert Path(hermes_kiokuko.__file__).is_relative_to(Path(sys.prefix))
+from hermes_kiokuko.compatibility import check_host
+from hermes_kiokuko.errors import KiokukoError
+try:
+    check_host(require_config=False)
+except KiokukoError as error:
+    assert error.code == 'UNSUPPORTED_HERMES', error.code
+else:
+    raise AssertionError('Python 3.14 must reject Hermes 0.21.0 before memory sync')
+print('PASS: installed wheel rejects Hermes 0.21.0 on Python 3.14')
+"""
+
 
 def main():
     wheel = Path(sys.argv[1]).resolve()
@@ -62,7 +79,8 @@ def main():
             profile.mkdir()
             env = os.environ.copy()
             env['KIOKUKO_HERMES_FIXTURE'] = version
-            subprocess.run([str(python), '-I', '-c', SMOKE, dependencies,
+            smoke = UNSUPPORTED_SMOKE if sys.version_info[:2] == (3, 14) and version == '0.21.0' else SMOKE
+            subprocess.run([str(python), '-I', '-c', smoke, dependencies,
                             str(ROOT / '.cache' / directory),
                             str(ROOT / 'tests/hermes_e2e'), str(profile)],
                            env=env, cwd=root, check=True)

@@ -1,0 +1,16 @@
+name: kiokuko-tools
+version: "0.1.14"
+description: Scoped memory with verbatim user commands and human-approved model proposals
+author: dkc
+license: MIT
+homepage: https://github.com/askdkc/kiokuko-ha
+provides_tools:
+  - kiokuko_recall
+  - kiokuko_propose
+  - kiokuko_manage
+provides_hooks:
+  - pre_llm_call
+  - pre_gateway_dispatch
+provides_middleware:
+  - llm_execution
+  - tool_execution

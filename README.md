@@ -6,14 +6,52 @@ Kiokuko(記憶庫) is a memory plugin for Hermes Agent. It separates memories by
 
 During compaction and at the end of a conversation, Kiokuko stores only facts that can be rechecked against project files or configuration. The database is stored at `$HERMES_HOME/kiokuko/kiokuko.db`.
 
-Supported environments are Python 3.11–3.13 and Hermes 0.21.
+Kiokuko supports Python 3.11–3.14 and Hermes 0.21, including the current PM source contract tested at `88c60858468d7adee27a752242c7c507fa4129d0`. Python 3.14 requires Hermes 0.21.4 or later in the 0.21 series; earlier hosts use an incompatible thread executor for memory synchronization.
 
-## Install
+## Install with current Hermes PM
 
-Install Kiokuko from PyPI into the same Python environment used by Hermes. This is the standard Hermes installation layout:
+Current Hermes manages plugin code and Python dependencies together. Use this route for the Python 3.14 Gateway. Installing into an old `venv/bin/python` does not add a PM workspace member. The published 0.1.13 wheel excludes Python 3.14; these instructions require the 0.1.14 source distribution containing the native plugin entry point.
+
+For the supplied, unpublished fix, extract `hermes_kiokuko-0.1.14.tar.gz` on the Gateway machine. Set `PLUGIN_SOURCE` to the extracted directory and `HERMES_HOME` to the profile served by that Gateway. Use the `hermes` launcher belonging to that installation:
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+export HERMES_HOME="/absolute/path/to/target/profile"
+PLUGIN_SOURCE="/absolute/path/to/hermes_kiokuko-0.1.14"
+test -f "$PLUGIN_SOURCE/plugin.yaml" && test -f "$PLUGIN_SOURCE/__init__.py" || exit 1
+test ! -e "$HERMES_HOME/plugins/kiokuko-tools" || { echo 'Existing plugin: use its managed update/replacement procedure'; exit 1; }
+mkdir -p "$HERMES_HOME/plugins"
+cp -R "$PLUGIN_SOURCE" "$HERMES_HOME/plugins/kiokuko-tools"
+hermes plugins enable kiokuko-tools || exit 1
+hermes kiokuko setup
+hermes kiokuko doctor --load-plugin
+```
+
+Approve dependency preparation when Hermes asks. A failure at `enable` means stop and resolve the PM error before running setup. When doctor reports `ok: true` and command registration succeeds, restart the Gateway serving this profile and check `/commands`. `setup` disables native MEMORY.md/USER.md use and preserves their files and existing Kiokuko data.
+
+Once the repaired source is published, new installations can use:
+
+```sh
+hermes plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+hermes kiokuko setup
+hermes kiokuko doctor --load-plugin
+```
+
+This is a custom Git source; catalog listing is not required. `--yes-deps` explicitly approves dependency installation. Git installations update with `hermes plugins update kiokuko-tools`, then a Gateway restart. An archive copied manually has no tracked Git source; replace it through an approved source-install procedure rather than assuming `plugins update` can fetch it. `/kiokuko-update` in native mode gives the managed update instructions and never invokes pip.
+
+The official catalog is a separate human-reviewed submission. This repository is not claimed to be catalog-listed or catalog-approved; legacy pip self-update code also requires a separate catalog-policy review. See [Hermes plugin documentation](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/) and [catalog submission requirements](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/).
+
+## Legacy pip installation (Hermes without PM)
+
+The procedures below apply only to older Hermes installations with a directly managed Python venv. Do not use them to modify a current PM-managed environment.
+
+
+Install Kiokuko into the Python environment that actually runs the target Hermes process. For Gateway chats, use the interpreter in that Gateway's launch command or service configuration, keeping its venv path. `$HOME/.hermes/hermes-agent/venv/bin/python` is correct only if the Gateway uses it; installing there does not affect a Gateway running another Python.
+
+Replace the path below with that interpreter. Confirm its path and version before installing:
+
+```sh
+export HERMES_PY="/absolute/path/to/gateway/python"
+"$HERMES_PY" -c 'import sys; print(sys.executable); print(sys.version)'
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
 else
@@ -24,7 +62,7 @@ fi
 Initialize the profile:
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
@@ -38,7 +76,7 @@ When `doctor` reports `ok: true`, restart Hermes. Native `MEMORY.md` and `USER.m
 If you see `active profile is 'main'` together with `Falling back to .../.hermes`, set the active profile explicitly and run setup again:
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
@@ -63,7 +101,7 @@ The update runs in the background using Hermes's own Python interpreter, with th
 For the first upgrade from v0.1.0, or to update from a terminal:
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # Use your actual profile path
 cd "$HOME/.hermes/hermes-agent" || exit 1
 if command -v uv >/dev/null 2>&1; then
@@ -74,14 +112,14 @@ fi
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
-Wait for the update to finish, then restart the Hermes process. For Telegram/Discord, restart the Hermes Gateway process serving those chats: a new chat session does not reload the installed plugin code. No OS reboot is needed. Python 3.14 is outside the current support range.
+Wait for the update to finish, then restart the Hermes process. For Telegram/Discord, restart the Hermes Gateway process serving those chats: a new chat session does not reload the installed plugin code. No OS reboot is needed. If a service manages the Gateway, verify its launch interpreter too: restarting from a different terminal Python does not change the service configuration.
 
 ### When `/kiokuko-update` returns `Unknown command`
 
 The command is not registered in that Gateway. An unregistered update command cannot repair this state. Check configuration and registration from a terminal using the same Python and profile. This example targets `main`:
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko setup
@@ -105,7 +143,7 @@ Check that `/commands` in the chat lists `kiokuko-update`. If terminal registrat
 If loading still fails, check the Python and checkout used to run Hermes.
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 test -f hermes_yaml.py || { echo 'Hermes source is missing hermes_yaml.py'; exit 1; }
 "$HERMES_PY" -c 'import hermes_yaml; from hermes_cli.plugins import get_plugin_commands; print(hermes_yaml.__file__)'
@@ -121,7 +159,7 @@ Reinstallation is **not required on every startup**. Use the normal update proce
 Transfer the wheel to the machine running Hermes and set `WHEEL` to its actual path; replace `VERSION` below with the supplied filename's version. Use the target profile's `HERMES_HOME`. The `--no-deps` option assumes Kiokuko's dependencies are already installed in this Hermes environment; omit it for a first installation that needs dependencies.
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 cd "$HOME/.hermes/hermes-agent" || exit 1
 
@@ -151,7 +189,7 @@ Reply in Japanese.
 Model proposals and natural-language requests such as “remember this” become pending candidates. Review and approve them from the CLI:
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko pending
 "$HERMES_PY" -m hermes_kiokuko approve CANDIDATE_ID
 ```
@@ -170,7 +208,7 @@ From an interactive Hermes CLI session in the project directory (v0.1.1+):
 Replace `CODE` with the confirmation code shown after `share`. Use `cancel` to exit without sharing. Global memories are shared with every user and project in the profile. Gateway chats (DM/group) cannot use this administrative flow; run it from the local CLI. The terminal command is also available:
 
 ```sh
-HERMES_PY="$HOME/.hermes/hermes-agent/venv/bin/python"
+: "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko curation
 # Or, when the venv bin directory is on PATH:
 kioku-curation
