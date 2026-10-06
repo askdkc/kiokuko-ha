@@ -157,11 +157,40 @@ def check_host(home: Path | None = None, *, require_config=True) -> None:
 
 
 def surface_is_compatible_and_selected() -> bool:
+    return surface_selection_report()['allowed']
+
+
+def surface_selection_report(tool_name=None) -> dict:
+    """Configuration/API admission; session authorization remains in middleware."""
     try:
         check_host()
-        return True
-    except (KiokukoError, OSError):
-        return False
+        from .identity import bound_values
+        from hermes_cli.profiles import get_active_profile_name
+        bound = bound_values()
+        profile = bound.get('PROFILE')
+        if profile and profile != get_active_profile_name():
+            raise KiokukoError('PROFILE_IDENTITY_MISMATCH')
+        if tool_name in load_config(active_home())['tool_access']['excluded_tools']:
+            raise KiokukoError('TOOL_INDIVIDUALLY_EXCLUDED')
+        if tool_name is not None:
+            from .config import read_yaml
+            from .tool_selection import memory_selection
+            selected = memory_selection(read_yaml(active_home() / 'config.yaml'), bound.get('PLATFORM') or 'cli')
+            if not selected['tools'].get(tool_name):
+                raise KiokukoError('MEMORY_TOOLSET_DISABLED')
+        return {'allowed': True, 'error': None}
+    except (KiokukoError, OSError, ImportError, AttributeError, TypeError):
+        error = sys.exc_info()[1]
+        return {'allowed': False, 'error': getattr(error, 'code', 'HOST_CONTRACT_MISMATCH')}
+
+
+def tool_availability_check(tool_name):
+    """A no-argument check_fn per tool, using the host's uncached local-check API."""
+    def available():
+        return surface_selection_report(tool_name)['allowed']
+    from tools import registry as registry_module
+    marker = getattr(registry_module, 'no_cache_check_fn', None)
+    return marker(available) if marker is not None else available
 
 
 def dispatch_contract_report(hermes_module, version):

@@ -8,6 +8,77 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.mark.parametrize('platform', ['photon', 'telegram'])
+def test_gateway_normal_setup_search_proposal_approval_recall(host, platform):
+    """Real Gateway config/binding/dispatch, simulated inbound transport; no Telegram network."""
+    import argparse
+    from gateway.run import GatewayRunner
+    from gateway import session_context as sc
+    from gateway.config import Platform
+    from gateway.session import SessionContext, SessionSource
+    from hermes_cli.profiles import get_active_profile_name
+    from hermes_kiokuko.config import read_yaml
+    from hermes_kiokuko.cli import execute, setup_parser
+    from hermes_kiokuko.provider import KiokukoMemoryProvider
+    from hermes_kiokuko import runtime
+    from agent.turn_context import _collect_pre_llm_call_context
+    from model_tools import get_tool_definitions, handle_function_call
+    home, _ = host
+    source = SessionSource(platform=Platform(platform), chat_id='chat', chat_type='dm',
+                           user_id='sender', profile=get_active_profile_name())
+    ctx = SessionContext(source=source, session_key=platform + '-key', session_id='normal-session',
+                         connected_platforms=[], home_channels={})
+    runner = GatewayRunner.__new__(GatewayRunner)
+    runner.adapters = {}
+    enabled, disabled = runner._resolve_turn_toolsets(read_yaml(home / 'config.yaml'), source, platform)
+    provider = KiokukoMemoryProvider()
+    provider.initialize(ctx.session_id, hermes_home=str(home))
+    tokens = runner._set_session_env(ctx)
+    try:
+        defs = get_tool_definitions(enabled_toolsets=enabled, disabled_toolsets=disabled,
+                                    quiet_mode=True, skip_tool_search_assembly=True)
+        search = json.loads(handle_function_call('tool_search', {'queries': ['kiokuko'], 'limit': 10},
+                                                enabled_toolsets=enabled, disabled_toolsets=disabled))
+        assert {'kiokuko_recall', 'kiokuko_propose', 'kiokuko_manage'} <= set(search['tools'])
+        assert {'kiokuko_recall', 'kiokuko_propose', 'kiokuko_manage'} <= {t['function']['name'] for t in defs}
+        agent = SimpleNamespace(session_id=ctx.session_id, platform=platform, model='test')
+        _collect_pre_llm_call_context(agent, effective_task_id='task', turn_id='turn',
+            original_user_message='日本語で返答する', messages=[{'role': 'user', 'content': '日本語で返答する'}], conversation_history=[])
+        def call(name, args):
+            return json.loads(handle_function_call(name, args, session_id=ctx.session_id,
+                turn_id='turn', task_id='task', enabled_toolsets=enabled, disabled_toolsets=disabled))
+        proposal = call('kiokuko_propose', {'action': 'propose', 'claim': '日本語で返答する',
+                                          'scope': 'principal', 'evidence_quote': '日本語で返答する'})
+        assert proposal['ok'] and proposal['data']['state'] == 'pending'
+        proposal_id = proposal['data']['id']
+        service = runtime.current()
+        with service.transaction() as db:
+            assert db.execute('SELECT count(*) FROM memory_entries').fetchone()[0] == 0
+        parser = argparse.ArgumentParser()
+        setup_parser(parser)
+        approved = execute(parser.parse_args(['approve', proposal_id]), home,
+                           input_fn=lambda _: proposal_id, output=lambda _: None)
+        with service.transaction() as db:
+            assert tuple(db.execute('SELECT state,promoted_entry_id FROM memory_candidates WHERE id=?',
+                                    (proposal_id,)).fetchone()) == ('accepted', approved['entry_id'])
+        recalled = call('kiokuko_recall', {'action': 'get', 'entry_id': approved['entry_id']})
+        assert recalled['ok'] and recalled['data']['id'] == approved['entry_id']
+        assert recalled['data']['confirmation_kind'] == 'cli_approved'
+        requested = call('kiokuko_manage', {'action': 'pin_request', 'entry_id': approved['entry_id'], 'expected_revision': 1})
+        assert requested['ok'] and requested['data']['state'] == 'pending'
+        with service.transaction() as db:
+            assert db.execute('SELECT pinned FROM memory_entries WHERE id=?', (approved['entry_id'],)).fetchone()[0] == 0
+        # A changed sender cannot consume this turn's authorization or read its entry.
+        token = sc._VAR_MAP['HERMES_SESSION_USER_ID'].set('other-sender')
+        try:
+            assert not call('kiokuko_recall', {'action': 'get', 'entry_id': approved['entry_id']})['ok']
+        finally:
+            sc._VAR_MAP['HERMES_SESSION_USER_ID'].reset(token)
+    finally:
+        sc.clear_session_vars(tokens)
+        provider.shutdown()
+
+
 @pytest.mark.parametrize("publish_initial", [False, True])
 def test_gateway_cached_turn_binding(host, publish_initial):
     home, _ = host

@@ -132,7 +132,7 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
-`doctor`で`ok: true`が表示されたら、Hermesを再起動してください。nativeの`MEMORY.md`と`USER.md`は無効になりますが、既存ファイルは削除されません。
+setup後はHermesを再起動して新規セッションを開始します。`doctor`は設定・DB検査と実セッションの公開状態を区別し、新しいdoctorプロセスでは既存チャットを未確認と表示します。この診断プロセス内の登録・検索を調べる場合は`doctor --load-plugin --platform cli`（または`telegram`）を使います。memoryが無効なら、`setup --enable-memory-toolset cli`で明示的に追加できます。全体無効化と個別除外は保持します。[ツール公開の診断](docs/operations.md#正規ツールが検索で見つからない場合)を参照してください。nativeの`MEMORY.md`と`USER.md`は無効になりますが、既存ファイルは削除されません。
 
 ## profileが違う場合
 

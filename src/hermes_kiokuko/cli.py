@@ -20,7 +20,11 @@ def setup_parser(parser):
     sub = parser.add_subparsers(dest="kiokuko_action", required=True)
     for command in ("setup", "status", "doctor", "config", "verify", "reindex", "pending", "conflicts", "export", "principals", "workspaces", "curation"):
         child = sub.add_parser(command)
+        if command == 'setup':
+            child.add_argument('--enable-memory-toolset', action='append', default=[], metavar='PLATFORM',
+                               help='Explicitly add memory to this platform selection (repeatable); preserve global disables and individual exclusions')
         if command == "doctor":
+            child.add_argument('--platform', default='cli', help='Target platform selection, e.g. cli or telegram')
             child.add_argument('--load-plugin', action='store_true',
                                help='Load configured Hermes plugins and check Kiokuko command registration in this process')
     from .monitor_cli import setup_parser as monitor_parser
@@ -77,14 +81,18 @@ def execute(args, home, *, input_fn=input, output=print):
     action = args.kiokuko_action
     if action in {"doctor", "status"}:
         from .diagnostics import diagnose
-        return diagnose(home, load_plugin=getattr(args, 'load_plugin', False))
+        return diagnose(home, load_plugin=getattr(args, 'load_plugin', False),
+                        platform=getattr(args, 'platform', 'cli'))
     if action == "setup":
         check_host(home, require_config=False)
-        setup(home)
+        setup(home, enable_memory_for=getattr(args, 'enable_memory_toolset', ()))
         check_host(home)
         store = Store(home, initialize=True)
         store.close()
-        return {"configured": True, "native_files": "preserved", "restart_agent": True}
+        from .tool_publication import tool_publication
+        return {"configured": True, "native_files": "preserved", "restart_agent": True,
+                "memory_operations_available_in_session": None,
+                "tool_publication": tool_publication(home)}
     if action == "restore":
         check_host(home)
         confirm({"restore": str(args.path), "same_profile_only": True}, "restore", input_fn=input_fn, output=output)

@@ -132,7 +132,7 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 "$HERMES_PY" -m hermes_kiokuko doctor
 ```
 
-When `doctor` reports `ok: true`, restart Hermes. Native `MEMORY.md` and `USER.md` are disabled, but existing files are preserved.
+Restart Hermes after setup and start a new session. `doctor` separates configuration and database checks from live session visibility; a fresh doctor process reports the existing chat as unconfirmed. To inspect registration and search in the doctor process, use `doctor --load-plugin --platform cli` (or `telegram`). If memory is disabled, explicitly opt in with `setup --enable-memory-toolset cli`; global disables and individual exclusions are preserved. See [tool publication diagnostics](docs/operations.md#正規ツールが検索で見つからない場合). Native `MEMORY.md` and `USER.md` are disabled, but existing files are preserved.
 
 ## When the profile is wrong
 

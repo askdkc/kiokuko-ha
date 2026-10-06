@@ -22,7 +22,7 @@ KIOKUKO_HERMES_FIXTURE=current-88c6085 \
   PYTHONPATH="$PWD/src:$PWD/.cache/hermes-current-88c6085" \
   .venv-py314/bin/python -m pytest tests/unit tests/integration tests/hermes_e2e -q
 .venv-py314/bin/python -m build --no-isolation
-.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.16.tar.gz \
+.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.17.tar.gz \
   --host .cache/hermes-current-88c6085
 ```
 
@@ -130,7 +130,7 @@ wheel導入後の試験（両fixtureと現在のtest依存関係が必要）:
 
 ```sh
 .venv/bin/python -m build --no-isolation
-.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.16-py3-none-any.whl
+.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.17-py3-none-any.whl
 ```
 
 このscriptは使い捨てvenvへローカルwheelを実pipで2回導入し、両hostのregistry・実Gateway
@@ -149,9 +149,9 @@ cancel後のjob観測とlock解放、CLIの4操作、monitor/research/curation�
 
 ```sh
 .venv-py314/bin/python -m build --no-isolation
-.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.16.tar.gz --host .cache/hermes-current-88c6085
-.venv-py314/bin/python scripts/verify_pm_lifecycle.py dist/hermes_kiokuko-0.1.16.tar.gz --host .cache/hermes-current-88c6085
-.venv-py314/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.16-py3-none-any.whl
+.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.17.tar.gz --host .cache/hermes-current-88c6085
+.venv-py314/bin/python scripts/verify_pm_lifecycle.py dist/hermes_kiokuko-0.1.17.tar.gz --host .cache/hermes-current-88c6085
+.venv-py314/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.17-py3-none-any.whl
 ```
 
 公開PM試験は使い捨てhomeへhostをコピーし、ローカルGit fixtureを公開install/updateコマンドで導入します。Hermesの通常ランチャー生成APIによる同一コマンドから起動し、bootstrapの環境選択で4 commands・3 tools・provider lifecycleを確認し、同一版更新前からのprocessと再起動後を照合します。無効なTOMLで更新を拒否した際、selection・config・DB・別profileが保持されることも検査します。Kiokukoのsrc/site-packagesを試験から注入しません。初期host依存には呼出元の検証用venvを使い、以降のgenerationはPMが作ります。管理toolchainと依存の取得にはネットワークが必要です。

@@ -6,6 +6,165 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.mark.parametrize('platform', ['cli', 'telegram'])
+def test_normal_setup_publishes_canonical_tools(host, platform):
+    """No test-side memory opt-in: use the same resolver as CLI/Gateway."""
+    home, _ = host
+    from hermes_kiokuko.config import read_yaml
+    from hermes_cli.tools_config import _get_platform_tools
+    from model_tools import get_tool_definitions
+    from tools.tool_search import dispatch_tool_search
+    cfg = read_yaml(home / 'config.yaml')
+    enabled = sorted(_get_platform_tools(cfg, platform))
+    definitions = get_tool_definitions(enabled_toolsets=enabled, quiet_mode=True,
+                                      skip_tool_search_assembly=True)
+    expected = {'kiokuko_recall', 'kiokuko_propose', 'kiokuko_manage'}
+    assert expected <= {tool['function']['name'] for tool in definitions}, enabled
+    result = json.loads(dispatch_tool_search({'queries': ['kiokuko'], 'limit': 10},
+                                            current_tool_defs=definitions))
+    assert expected <= set(result['tools']), result
+
+
+def test_doctor_does_not_call_disabled_memory_available(host):
+    home, _ = host
+    from hermes_kiokuko.config import read_yaml, write_yaml
+    from hermes_kiokuko.provider import KiokukoMemoryProvider
+    from hermes_kiokuko.diagnostics import diagnose
+    provider = KiokukoMemoryProvider()
+    provider.initialize('session', hermes_home=str(home))
+    try:
+        cfg = read_yaml(home / 'config.yaml')
+        cfg['agent'] = {'disabled_toolsets': ['memory']}
+        write_yaml(home / 'config.yaml', cfg)
+        info = diagnose(home, load_plugin=True)
+        assert not info['ok']
+        assert info['tool_publication']['configuration']['error'] == 'MEMORY_TOOLSET_DISABLED'
+        assert info['tool_publication']['session']['status'] == 'unconfirmed'
+    finally:
+        provider.shutdown()
+
+
+@pytest.mark.parametrize('cause,code', [
+    ('empty_selection', 'MEMORY_TOOLSET_DISABLED'),
+    ('excluded_tool', 'TOOL_INDIVIDUALLY_EXCLUDED'),
+    ('plugin_disabled', 'GENERAL_PLUGIN_DISABLED'),
+    ('profile_mismatch', 'PROFILE_IDENTITY_MISMATCH'),
+    ('incompatible', 'HOST_CONTRACT_MISMATCH'),
+])
+def test_doctor_visibility_denials_are_specific_and_readonly(host, monkeypatch, cause, code):
+    home, manager = host
+    from hermes_kiokuko.config import read_yaml, write_yaml, load_config
+    from hermes_kiokuko.diagnostics import diagnose
+    cfg = read_yaml(home / 'config.yaml')
+    if cause == 'empty_selection':
+        cfg['platform_toolsets'] = {'cli': []}
+    elif cause == 'plugin_disabled':
+        cfg['plugins']['disabled'] = ['kiokuko-tools']
+    elif cause == 'excluded_tool':
+        private = load_config(home)
+        private['tool_access']['excluded_tools'] = ['kiokuko_propose']
+        write_yaml(home / 'kiokuko/config.yaml', private)
+    elif cause == 'profile_mismatch':
+        from gateway import session_context as sc
+        sc._VAR_MAP['HERMES_SESSION_PROFILE'].set('foreign-profile')
+    elif cause == 'incompatible':
+        monkeypatch.setattr('hermes_kiokuko.compatibility.host_contract_report',
+                            lambda: {'ok': False, 'error': code})
+    write_yaml(home / 'config.yaml', cfg)
+    if cause == 'plugin_disabled':
+        manager.discover_and_load(force=True)
+    before = {p.relative_to(home): p.read_bytes() for p in home.rglob('*') if p.is_file()}
+    info = diagnose(home)
+    assert code in info['tool_publication']['errors'], info['tool_publication']
+    assert info['ok'] is False
+    assert info['memory_operations_available_in_session'] is None
+    assert info['session_verification'] == 'unconfirmed'
+    assert not (home / 'kiokuko/kiokuko.db').exists()
+    assert {p.relative_to(home): p.read_bytes() for p in home.rglob('*') if p.is_file()} == before
+
+
+def test_setup_opt_in_preserves_suppression_and_exclusions(host):
+    home, _ = host
+    from hermes_kiokuko.config import setup, read_yaml, write_yaml, load_config
+    from hermes_kiokuko.tool_publication import tool_publication
+    cfg = read_yaml(home / 'config.yaml')
+    cfg['platform_toolsets'] = {'cli': [], 'telegram': []}
+    cfg['agent'] = {'disabled_toolsets': ['memory']}
+    write_yaml(home / 'config.yaml', cfg)
+    private = load_config(home)
+    private['tool_access']['excluded_tools'] = ['kiokuko_manage']
+    write_yaml(home / 'kiokuko/config.yaml', private)
+    setup(home)
+    assert read_yaml(home / 'config.yaml')['platform_toolsets'] == {'cli': [], 'telegram': []}
+    setup(home, enable_memory_for=['telegram'])
+    updated = read_yaml(home / 'config.yaml')
+    assert updated['platform_toolsets'] == {'cli': [], 'telegram': ['memory']}
+    assert updated['agent'] == {'disabled_toolsets': ['memory']}
+    assert load_config(home)['tool_access']['excluded_tools'] == ['kiokuko_manage']
+    assert tool_publication(home, platform='telegram')['configuration']['available'] is False
+    # A deliberate plugin disable is also preserved by repeated setup.
+    updated['plugins']['disabled'] = ['kiokuko-tools']
+    write_yaml(home / 'config.yaml', updated)
+    setup(home)
+    assert read_yaml(home / 'config.yaml')['plugins']['disabled'] == ['kiokuko-tools']
+
+
+def test_doctor_before_plugin_load_is_unconfirmed_without_loading(host):
+    home, _ = host
+    from hermes_cli.plugins import _reset_plugin_managers_for_tests
+    from hermes_kiokuko.diagnostics import diagnose
+    _reset_plugin_managers_for_tests()
+    before = {p.relative_to(home): p.read_bytes() for p in home.rglob('*') if p.is_file()}
+    info = diagnose(home)
+    assert info['tool_publication']['plugin']['loaded'] is False
+    assert 'PLUGIN_NOT_LOADED_IN_THIS_PROCESS' in info['tool_publication']['errors']
+    assert info['session_verification'] == 'unconfirmed'
+    assert {p.relative_to(home): p.read_bytes() for p in home.rglob('*') if p.is_file()} == before
+
+
+def test_doctor_reports_check_fn_denial_separately_from_registration(host, monkeypatch):
+    home, _ = host
+    from tools.registry import registry
+    from hermes_kiokuko.diagnostics import diagnose
+    monkeypatch.setattr(registry.get_entry('kiokuko_propose'), 'check_fn', lambda: False)
+    info = diagnose(home)
+    assert info['tool_publication']['registration']['kiokuko_propose'] is True
+    assert info['tool_publication']['check_fn']['kiokuko_propose']['allowed'] is False
+    assert 'CHECK_FN_DENIED' in info['tool_publication']['errors']
+
+
+@pytest.mark.parametrize('restriction', ['individual', 'toolset'])
+def test_excluded_tool_rejects_stale_dispatch_without_saving(host, restriction):
+    home, _ = host
+    from hermes_kiokuko.config import load_config, read_yaml, write_yaml
+    from hermes_kiokuko.provider import KiokukoMemoryProvider
+    from hermes_kiokuko.turn_hook import pre_llm_call
+    from model_tools import handle_function_call
+    from hermes_kiokuko import runtime
+    provider = KiokukoMemoryProvider()
+    provider.initialize('session', hermes_home=str(home))
+    try:
+        pre_llm_call(session_id='session', turn_id='turn', task_id='task', platform='cli', user_message='hello')
+        if restriction == 'individual':
+            private = load_config(home)
+            private['tool_access']['excluded_tools'] = ['kiokuko_propose']
+            write_yaml(home / 'kiokuko/config.yaml', private)
+            code = 'TOOL_INDIVIDUALLY_EXCLUDED'
+        else:
+            cfg = read_yaml(home / 'config.yaml')
+            cfg['agent'] = {'disabled_toolsets': ['memory']}
+            write_yaml(home / 'config.yaml', cfg)
+            code = 'MEMORY_TOOLSET_DISABLED'
+        result = json.loads(handle_function_call('kiokuko_propose', {'action': 'propose', 'claim': 'must not save'},
+            session_id='session', turn_id='turn', task_id='task'))
+        assert result == {'ok': False, 'error': code}
+        with runtime.current().transaction() as db:
+            assert db.execute('SELECT count(*) FROM memory_candidates').fetchone()[0] == 0
+            assert db.execute('SELECT count(*) FROM memory_entries').fetchone()[0] == 0
+    finally:
+        provider.shutdown()
+
+
 def test_memory_provider_resolves_to_package_directory(host):
     home, _ = host
     from pathlib import Path

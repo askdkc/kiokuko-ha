@@ -49,6 +49,36 @@ plugins:
 
 `hermes memory setup`からは通常記憶の自動注入とpassive候補作成を切り替えられます。通常記憶の注入を止めても、既出記憶の訂正通知は維持します。
 
+### 正規ツールが検索で見つからない場合
+
+providerの設定だけでは、`kiokuko_recall`・`kiokuko_propose`・`kiokuko_manage`の公開を確認したことにはなりません。通常setupはホストの既定toolsetを使い、保存済みの無効化設定を保持します。未設定という理由だけで`memory`を無効と判定しません。対象platformへの追加は明示的に選べます。
+
+```sh
+hermes kiokuko doctor --platform telegram
+# 明示的なロード・カタログ検索検査。この新しいCLIプロセスだけを検査します。
+hermes kiokuko doctor --platform telegram --load-plugin
+# 対象platformへの追加を選ぶ場合だけ実行します。
+hermes kiokuko setup --enable-memory-toolset telegram
+```
+
+`--enable-memory-toolset`は繰り返して複数platformを指定できます。`agent.disabled_toolsets`の全体無効化、他platformの選択、pluginの明示無効化は解除しません。全体無効化を解除するかは管理者が別途判断します。既存の空toolset選択や、ホストが記録した既知toolsetの意図的な省略も尊重します。
+
+個別に除外する場合は`$HERMES_HOME/kiokuko/config.yaml`に次を設定します。利用できるのは正規3ツール名だけです。除外したツールへの古いセッションからの直接呼び出しも拒否します。
+
+```yaml
+tool_access:
+  excluded_tools:
+    - kiokuko_propose
+```
+
+doctorの`tool_publication`は、pluginのロード、3ツールの登録、`check_fn`の許可と拒否理由、memoryの設定上の公開条件、明示検査のカタログ・検索、providerの初期化を別々に示します。通常doctorはpluginをロードせず、保存操作も行いません。`configuration.scope: memory_only_config_projection`は認証情報を調べない設定診断です。`--load-plugin`はホストの完全な解決と検索を明示的に実行するため、ホストのロードや認証用lock等の副作用があり得ます。記憶の保存は行いません。
+
+`PLUGIN_NOT_LOADED_IN_THIS_PROCESS`は、この診断プロセスで未ロードという意味です。別プロセスのGatewayが未ロードだと断定するものではありません。`MEMORY_TOOLSET_DISABLED`、`TOOL_INDIVIDUALLY_EXCLUDED`、`PROFILE_IDENTITY_MISMATCH`、互換性エラーを切り分け、除外中に検索の再試行だけを繰り返さないでください。
+
+PID、実行Python・package・profileを照合します。既存チャットのagentを同じプロセスで直接調べられなければ、`session_verification: unconfirmed`（実セッション未確認）、`memory_operations_available_in_session: null`です。`--load-plugin`の成功でも既存チャットの成功とは表示しません。同一プロセスの診断用APIは`diagnose(home, platform=agent.platform, agent=agent)`で実agentのprovider所有profile、公開schemaのsnapshotと検索scopeを確認できます。設定変更後は担当Hermes/Gatewayを再起動し、新規セッションで確認します。
+
+保存先は`$HERMES_HOME/kiokuko/kiokuko.db`です。CLIの`setup`またはprovider初期化が作成します。`kiokuko_propose`が返す`state: pending`は承認待ち候補です。既存の`approve`操作で表示内容を人が確認し、candidateの`accepted`と`promoted_entry_id`、entryの`cli_approved`を対応付けてから、正規`kiokuko_recall`で取得を確認します。DBに候補があるだけでは確定保存済みではありません。`@kiokuko remember`は別の明示保存経路であり、通常ツールの公開不備の代替にはしません。
+
 ## HOST_CONTRACT_MISMATCHの調査
 
 このコードだけでは不足モジュール、不足API、変更された引数を判別できません。

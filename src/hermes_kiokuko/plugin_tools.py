@@ -7,6 +7,13 @@ def _handler(name, args, session_id, task_id):
     try:
         ctx = require_context(name, session_id, task_id)
         service, snap = ctx.service, ctx.snapshot
+        if name in service.config['tool_access']['excluded_tools']:
+            raise KiokukoError('TOOL_INDIVIDUALLY_EXCLUDED')
+        from .config import read_yaml
+        from .tool_selection import memory_selection
+        selection = memory_selection(read_yaml(service.store.home / 'config.yaml'), snap.platform)
+        if not selection['tools'].get(name):
+            raise KiokukoError('MEMORY_TOOLSET_DISABLED')
         if not isinstance(args, dict):
             raise KiokukoError("INVALID_ARGUMENTS")
         action = args.get("action", "search" if name == "kiokuko_recall" else "propose")

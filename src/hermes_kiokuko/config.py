@@ -10,6 +10,7 @@ DEFAULTS = {
     "monitor": {"enabled": False},
     "experience_learning": {"mode": "off"},
     "task_profile_memory": {"mode": "off"},
+    "tool_access": {"excluded_tools": []},
     "verified_compaction": {"enabled": True},
     "write_policy": "explicit_verbatim_or_human_approval_or_file_verification",
     "context_injection": {"enabled": True, "source": "pre_llm_call", "max_entries": 8,
@@ -75,7 +76,7 @@ def load_config(home: Path) -> dict:
             cfg[key].update(value)
         else:
             cfg[key] = value
-    adjustable = {("research", "mode"),("task_profile_memory", "mode"), ("experience_learning", "mode"),("monitor", "enabled"), ("context_injection", "enabled"), ("context_injection", "max_entries"),
+    adjustable = {("tool_access", "excluded_tools"), ("research", "mode"),("task_profile_memory", "mode"), ("experience_learning", "mode"),("monitor", "enabled"), ("context_injection", "enabled"), ("context_injection", "max_entries"),
                   ("verified_compaction", "enabled"),
                   ("context_injection", "max_chars"), ("context_injection", "min_authority"),
                   ("context_injection", "min_confidence"), ("explicit_commands", "enabled"),
@@ -96,6 +97,10 @@ def load_config(home: Path) -> dict:
         raise KiokukoError("INVALID_CONFIG")
     if cfg["research"]["mode"] not in {"off", "command", "auto"}:
         raise KiokukoError("INVALID_CONFIG")
+    from .tool_context import TOOL_NAMES
+    excluded = cfg['tool_access']['excluded_tools']
+    if any(not isinstance(name, str) or name not in TOOL_NAMES for name in excluded):
+        raise KiokukoError('INVALID_CONFIG')
     inject = cfg["context_injection"]
     if not (1 <= inject["max_entries"] <= 8 and 700 <= inject["max_chars"] <= 2200
             and 70 <= inject["min_authority"] <= 100 and .8 <= inject["min_confidence"] <= 1):
@@ -103,7 +108,8 @@ def load_config(home: Path) -> dict:
     return cfg
 
 
-def setup(home: Path) -> None:
+def setup(home: Path, *, enable_memory_for=()) -> None:
+    """Configure the provider; change platform toolsets only on explicit opt-in."""
     private_directory(home)
     private_directory(home / "kiokuko")
     with file_lock(home / "kiokuko" / "config.lock", exclusive=True):
@@ -121,7 +127,21 @@ def setup(home: Path) -> None:
                 raise KiokukoError("INVALID_CONFIG")
         if "kiokuko-tools" not in plugins["enabled"]:
             plugins["enabled"].append("kiokuko-tools")
-        plugins["disabled"] = [item for item in plugins["disabled"] if item != "kiokuko-tools"]
+        if enable_memory_for:
+            from hermes_cli.tools_config import _platform_default_toolset
+            platforms = cfg.setdefault('platform_toolsets', {})
+            if not isinstance(platforms, dict):
+                raise KiokukoError('INVALID_CONFIG')
+            for platform in enable_memory_for:
+                if not isinstance(platform, str) or not platform or len(platform) > 64 or not all(
+                        c.isascii() and (c.isalnum() or c in '_-') for c in platform):
+                    raise KiokukoError('INVALID_CONFIG')
+                selection = platforms.get(platform)
+                if selection is None:
+                    selection = [_platform_default_toolset(platform)]
+                if not isinstance(selection, list) or any(not isinstance(name, str) for name in selection):
+                    raise KiokukoError('INVALID_CONFIG')
+                platforms[platform] = list(dict.fromkeys([*selection, 'memory']))
         write_yaml(home / "config.yaml", cfg)
         if not (home / "kiokuko" / "config.yaml").exists():
             write_yaml(home / "kiokuko" / "config.yaml", DEFAULTS)

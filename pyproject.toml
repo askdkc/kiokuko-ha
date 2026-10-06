@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-kiokuko"
-version = "0.1.16"
+version = "0.1.17"
 description = "Scoped, human-approved memory for Hermes Agent"
 readme = "README.md"
 authors = [{name = "dkc"}]

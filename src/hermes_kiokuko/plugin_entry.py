@@ -1,5 +1,5 @@
 from .provenance import runtime_provenance
-from .compatibility import surface_is_compatible_and_selected
+from .compatibility import tool_availability_check
 from .plugin_tools import recall_handler, propose_handler, manage_handler
 from .schemas import RECALL_SCHEMA, PROPOSE_SCHEMA, MANAGE_SCHEMA
 from .tool_context import tool_execution_middleware
@@ -15,7 +15,7 @@ def register(ctx, *, managed=False):
             ("kiokuko_propose", PROPOSE_SCHEMA, propose_handler),
             ("kiokuko_manage", MANAGE_SCHEMA, manage_handler)):
         ctx.register_tool(name=name, toolset="memory", schema=schema, handler=handler,
-                          check_fn=surface_is_compatible_and_selected,
+                          check_fn=tool_availability_check(name),
                           description="Kiokuko scoped memory; model proposals require human approval")
     ctx.register_hook("pre_llm_call", pre_llm_call)
     from .monitor_capture import llm_execution_middleware, capture_tool_middleware

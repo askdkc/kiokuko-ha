@@ -44,7 +44,7 @@ def command_registration(home):
     return result
 
 
-def diagnose(home, *, running=False, load_plugin=False):
+def diagnose(home, *, running=False, load_plugin=False, platform='cli', agent=None):
     home = Path(home).resolve()
     from .runtime import provider_ready
     result = {'python': sys.executable, 'python_version': sys.version.split()[0],
@@ -81,6 +81,12 @@ def diagnose(home, *, running=False, load_plugin=False):
             result['runtime_provenance'] = result['command_registration']['runtime_provenance']
         if not result['command_registration']['ok']:
             result['errors'].append(result['command_registration']['error'])
+    from .tool_publication import tool_publication
+    result['tool_publication'] = tool_publication(home, platform=platform, agent=agent,
+                                                 probe_catalog=load_plugin)
+    result['errors'].extend(result['tool_publication']['errors'])
+    result['memory_operations_available_in_session'] = result['tool_publication']['session'].get('available')
+    result['session_verification'] = result['tool_publication']['session']['status']
     path = home / 'kiokuko' / 'kiokuko.db'
     try:
         checked_file(path)

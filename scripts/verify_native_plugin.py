@@ -37,6 +37,40 @@ assert find_provider_dir('kiokuko') is not None
 provider = load_memory_provider('kiokuko')
 assert provider is not None
 provider.initialize('native-install-smoke', hermes_home=str(home))
+assert provider.get_tool_schemas() == []  # Publication belongs to the general plugin.
+from hermes_kiokuko.config import read_yaml
+from hermes_cli.tools_config import _get_platform_tools
+from model_tools import get_tool_definitions, handle_function_call
+from agent.turn_context import _collect_pre_llm_call_context
+from types import SimpleNamespace
+expected = {'kiokuko_recall','kiokuko_propose','kiokuko_manage'}
+enabled = sorted(_get_platform_tools(read_yaml(home / 'config.yaml'), 'cli'))
+catalog = get_tool_definitions(enabled_toolsets=enabled, quiet_mode=True, skip_tool_search_assembly=True)
+assert expected <= {tool['function']['name'] for tool in catalog}, enabled
+search = json.loads(handle_function_call('tool_search', {'queries':['kiokuko'],'limit':10}, enabled_toolsets=enabled))
+assert expected <= set(search['tools']), search
+agent = SimpleNamespace(session_id='native-install-smoke', platform='cli', model='test')
+_collect_pre_llm_call_context(agent, effective_task_id='smoke', turn_id='turn',
+    original_user_message='Use Japanese replies', messages=[{'role':'user','content':'Use Japanese replies'}], conversation_history=[])
+def call(name, args):
+    return json.loads(handle_function_call(name, args, session_id=agent.session_id,
+        task_id='smoke', turn_id='turn', enabled_toolsets=enabled))
+proposal = call('kiokuko_propose', {'action':'propose','claim':'Use Japanese replies','scope':'principal'})
+assert proposal['ok'] and proposal['data']['state'] == 'pending', proposal
+from hermes_kiokuko import runtime
+with runtime.current().transaction() as sql:
+    assert sql.execute('SELECT count(*) FROM memory_entries').fetchone()[0] == 0
+from hermes_kiokuko.cli import execute, setup_parser
+import argparse
+parser = argparse.ArgumentParser()
+setup_parser(parser)
+proposal_id = proposal['data']['id']
+approved = execute(parser.parse_args(['approve',proposal_id]), home, input_fn=lambda _: proposal_id, output=lambda _: None)
+with runtime.current().transaction() as sql:
+    assert tuple(sql.execute('SELECT state,promoted_entry_id FROM memory_candidates WHERE id=?',(proposal_id,)).fetchone()) == ('accepted',approved['entry_id'])
+recalled = call('kiokuko_recall', {'action':'get','entry_id':approved['entry_id']})
+assert recalled['ok'] and recalled['data']['id'] == approved['entry_id']
+assert recalled['data']['confirmation_kind'] == 'cli_approved'
 provider.shutdown()
 from hermes_cli.plugin_dev import doctor_plugin
 report = doctor_plugin(home / 'plugins' / 'kiokuko-tools')
@@ -44,7 +78,7 @@ assert report.ok, report.findings
 assert version('hermes-kiokuko') == __version__
 import hermes_kiokuko
 assert Path(hermes_kiokuko.__file__).resolve().is_relative_to(Path(sys.argv[1]).resolve())
-print('PASS: current PM builds and installs native plugin; real discovery, provider lifecycle, doctor, admission and managed update route')
+print('PASS: current PM native install; normal setup catalog/search/canonical proposal, human approval and persisted recall; provider lifecycle, doctor and managed update')
 '''
 
 
