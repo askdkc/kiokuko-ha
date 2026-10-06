@@ -2,17 +2,25 @@ import argparse
 from dataclasses import replace
 import json
 import sqlite3
+import time
 
 import pytest
 
 from hermes_kiokuko.config import load_config, write_yaml
-from hermes_kiokuko.deliveries import prepare, sync_completed
+from hermes_kiokuko.deliveries import prepare as prepare_delivery, sync_completed
 from hermes_kiokuko.errors import KiokukoError
 from hermes_kiokuko.models import Identity
 from hermes_kiokuko.profile_resolver import Candidate, decide, identifiers, relative_target
 from hermes_kiokuko.task_profiles import (capture_completed, current_path, delete, review,
                                           reindex, FENCE)
 from hermes_kiokuko.workspace import resolve_workspace
+
+
+def prepare(*args, deadline=None, **kwargs):
+    # These tests cover profile decisions, not the production 150ms latency budget.
+    # Keep a bounded functional budget; test the real deadline separately below.
+    return prepare_delivery(*args, deadline=time.monotonic() + 5 if deadline is None else deadline,
+                            **kwargs)
 
 
 @pytest.fixture
@@ -295,3 +303,35 @@ def test_candidate_budget_is_incomplete_and_replay_does_not_choose_new_source(se
     prepare(service,snap,query,deadline=__import__('time').monotonic()+2)
     with service.transaction() as db:
         assert initial==[tuple(r) for r in db.execute('SELECT profile_id,target_index,decision FROM task_profile_candidates WHERE resolution_id=?',(resolution['id'],))]
+
+
+@pytest.mark.parametrize('functional,budget,elapsed,expires', [
+    (False, None, .149, False), (False, None, .151, True),
+    (False, .3, .299, False), (False, .3, .301, True),
+    (True, None, .2, False), (True, .1, .2, True),
+])
+def test_prepare_deadline_and_rollback(service, profiles, monkeypatch, functional, budget, elapsed, expires):
+    _, _, turn = profiles
+    raw = 'Inspect `src/widget.py`'
+    snap = turn(raw, 'deadline-consumer')
+    clock = [1000.]
+    monkeypatch.setattr(time, 'monotonic', lambda: clock[0])
+    original = service.check_snapshot
+    calls = 0
+    def delayed_final_validation(db, snapshot):
+        nonlocal calls
+        original(db, snapshot)
+        calls += 1
+        if calls == 2:
+            # Model scheduling/IO time after writes, without a wall-clock sleep.
+            clock[0] += elapsed
+    monkeypatch.setattr(service, 'check_snapshot', delayed_final_validation)
+    action = prepare if functional else prepare_delivery
+    kwargs = {} if budget is None else {'deadline': clock[0] + budget}
+    if expires:
+        with pytest.raises(KiokukoError, match='^DEADLINE_EXCEEDED$'):
+            action(service, snap, raw, **kwargs)
+    else:
+        assert 'KIOKUKO MEMORY POLICY:' in action(service, snap, raw, **kwargs)
+    assert count(service, 'retrieval_deliveries') == (0 if expires else 1)
+    assert count(service, 'task_profile_resolutions') == (0 if expires else 1)
