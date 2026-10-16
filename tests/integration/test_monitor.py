@@ -17,6 +17,30 @@ from hermes_kiokuko.monitor import Monitor, binding_hash, remove_run, status
 from hermes_kiokuko.orca_transport import OrcaProcess, read_trace, run_path, runtime_check
 
 
+def test_node_runtime_uses_writer_capability_not_version_metadata(tmp_path, monkeypatch):
+    import shlex
+    import shutil
+    real_node = shutil.which('node')
+    assert real_node, 'Monitor integration requires a working Node runtime'
+    wrapper = tmp_path / 'node'
+    wrapper.write_text('#!/bin/sh\nif [ "$1" = "--version" ]; then\n'
+                       ' printf "compatible-future-runtime\\n"\n exit 0\nfi\n'
+                       f'exec {shlex.quote(real_node)} "$@"\n')
+    wrapper.chmod(0o755)
+    monkeypatch.setattr('hermes_kiokuko.orca_transport.shutil.which', lambda _: str(wrapper))
+    assert runtime_check() == str(wrapper)
+    assert list(tmp_path.iterdir()) == [wrapper]  # The readiness probe must create no trace.
+
+
+def test_node_runtime_rejects_missing_writer_protocol(tmp_path, monkeypatch):
+    wrapper = tmp_path / 'node'
+    wrapper.write_text('#!/bin/sh\nprintf "{}\\n"\n')
+    wrapper.chmod(0o755)
+    monkeypatch.setattr('hermes_kiokuko.orca_transport.shutil.which', lambda _: str(wrapper))
+    with pytest.raises(KiokukoError, match='MONITOR_NODE_UNSUPPORTED'):
+        runtime_check()
+
+
 @pytest.fixture
 def enabled(service):
     cfg = load_config(service.store.home)
@@ -43,6 +67,42 @@ def seal(service,snap,events,run_id=None):
         db.execute("UPDATE monitor_runs SET state='complete',events_hash=?,completed_at=? WHERE id=?",(ack['integrity']['events_sha256'],now(),run_id))
         db.execute('INSERT INTO experience_jobs VALUES (?, ?, NULL,0,?)',(run_id,'running',now()))
         return dict(db.execute('SELECT * FROM monitor_runs WHERE id=?',(run_id,)).fetchone())
+
+
+def test_failed_hook_can_abort_only_its_own_capture(enabled, make_turn):
+    from copy import copy
+    from hermes_kiokuko.monitor import get_manager, release_home
+    from hermes_kiokuko.monitor_capture import abort_turn, begin_turn
+    manager = get_manager(enabled)
+    snap = make_turn('inspect widget.py')
+    try:
+        binding = begin_turn(enabled, snap, 'inspect widget.py')
+        first = binding[1]
+        assert first is not None
+        duplicate = begin_turn(enabled, snap, 'inspect widget.py')
+        assert duplicate is None
+        abort_turn(duplicate, 'STORE_BUSY')
+        assert manager.captures[snap.key] is first and not first.closed
+        abort_turn((manager, copy(first)), 'STORE_BUSY')
+        assert manager.captures[snap.key] is first and not first.closed
+        abort_turn(binding, 'STORE_BUSY')
+        assert manager.wait_idle(timeout=2)
+        next_snap = make_turn('inspect widget.py')
+        next_binding = begin_turn(enabled, next_snap, 'inspect widget.py')
+        replacement = next_binding[1]
+        assert replacement is not first
+        stale = copy(first)
+        stale.snapshot = next_snap
+        abort_turn((manager, stale), 'DEADLINE_EXCEEDED')
+        assert manager.captures[next_snap.key] is replacement and not replacement.closed
+        abort_turn(next_binding, 'DEADLINE_EXCEEDED')
+        assert manager.wait_idle(timeout=2)
+        with enabled.transaction() as db:
+            assert dict(db.execute('SELECT error_code,state FROM monitor_runs')) == {
+                'STORE_BUSY': 'incomplete', 'DEADLINE_EXCEEDED': 'incomplete'}
+            assert db.execute('SELECT count(*) FROM experience_jobs').fetchone()[0] == 0
+    finally:
+        release_home(enabled.store.home)
 
 
 def example_events():

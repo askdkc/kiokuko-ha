@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 def pre_llm_call(*, session_id: str, turn_id: str, user_message, task_id="",
                  conversation_history=None, platform="", parent_session_id="", **kwargs):
     service = None
+    snapshot = capture = None
     # One deadline covers snapshot, explicit commit and context preparation.
     deadline = time.monotonic() + .5
     stage = "runtime"
@@ -27,7 +28,7 @@ def pre_llm_call(*, session_id: str, turn_id: str, user_message, task_id="",
                                     workspace_root=resolve_agent_cwd())
         stage = "monitor"
         from .monitor_capture import begin_turn
-        begin_turn(service, snapshot, user_message)
+        capture = begin_turn(service, snapshot, user_message)
         stage = "explicit_command"
         receipt = None
         if service.config["explicit_commands"]["enabled"]:
@@ -47,6 +48,12 @@ def pre_llm_call(*, session_id: str, turn_id: str, user_message, task_id="",
         # The host otherwise logs arbitrary exception text and discards the hook result.
         # Keep the cause visible without exposing user text, paths or identity values.
         logger.warning("Kiokuko pre_llm_call failed: stage=%s code=%s", stage, code)
+        if capture is not None:
+            try:
+                from .monitor_capture import abort_turn
+                abort_turn(capture, code)
+            except Exception:
+                runtime.record_status('MONITOR_COMPLETION_FAILED')
         runtime.record_status(code, service)
         # Host cannot turn failure into delivery success: this has no signed marker.
         return {"context": "KIOKUKO STATUS: " + code + ". Memory context unavailable."}

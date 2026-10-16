@@ -34,6 +34,7 @@ def test_ordinary_search_runs_source_chasing(host, monkeypatch, platform, bridge
                                                            'Original report.\n' + quote)} for u in urls]})
     def model(home, payload):
         if payload['stage'] == 'plan':
+            assert payload['request'] == 'Search for the field experiment'
             return {'claims': [payload['request'], 'What experiment?', 'What result?'],
                     'routes': [{'query': 'experiment terminology', 'angle': 'terms'},
                                {'query': 'experiment original authors', 'angle': 'authors'}]}

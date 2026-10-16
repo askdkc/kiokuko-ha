@@ -6,7 +6,7 @@ Kiokuko(記憶庫)はHermes Agent用の記憶pluginです。本人・会話・wo
 
 compact時と会話終了時には、プロジェクト内のファイルや設定で再確認できる項目だけを検証済み記憶として保存します。保存先は`$HERMES_HOME/kiokuko/kiokuko.db`です。
 
-Kiokukoの対応範囲はPython 3.11〜3.14、Hermes 0.21系列です。現行PMのソース契約は`88c60858468d7adee27a752242c7c507fa4129d0`で検証します。Python 3.14ではHermes 0.21.4以降が必要です。それ以前のhostは記憶同期に使うスレッド処理が3.14に対応していません。
+Kiokukoは標準`tomllib`を必要とするためPython 3.11以降を要求し、上限は設けません。Hermesは必要なmemory/plugin APIと、メモリ内だけで行う同期試験で互換性を判定します。PyYAMLも上限を設けず、設定の安全な読み書きとPython object tagの拒否を実動作で検査します。版数やソースfingerprintでは利用を制限しません。Python 3.14で動かない旧executorなど、実際に同期できないhostは拒否します。[検証記録](docs/verification.md)に試験済みhostと確認範囲を記載しています。
 
 ## 現行HermesのPMで導入する
 
@@ -357,7 +357,7 @@ kioku-curation
 
 ## 任意のAPI監視・経験記憶
 
-HermesのCLI・GatewayからOpenAI互換APIへの要求・応答をOrcaReplayへ記録できます。Node.js 22.12以降を用意し、対象profileのHermes対話CLIまたはチャットで有効化・状態確認します。
+HermesのCLI・GatewayからOpenAI互換APIへの要求・応答をOrcaReplayへ記録できます。同梱writerのprotocol検査に通るNode.jsを用意し、対象profileのHermes対話CLIまたはチャットで有効化・状態確認します。
 
 ```text
 /kiokuko-monitor enable

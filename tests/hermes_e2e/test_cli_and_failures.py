@@ -11,6 +11,8 @@ def test_doctor_explicitly_checks_command_loading(host):
     Store(home, initialize=True).close()
     result = diagnose(home, load_plugin=True)
     assert result['ok'] is True
+    assert result['ok_scope'] == 'readiness_checks_only'
+    assert result['deliveries'] == {} and result['answer_application_verified'] is None
     assert result['command_registration']['ok'] is True
     assert result['command_registration']['commands']['kiokuko-update'] is True
     assert result['command_registration']['gateway_loaded'] is None
@@ -167,7 +169,7 @@ def test_hook_timeout_skip_and_late_completion_stays_prepared(host, monkeypatch)
         assert db.execute("SELECT count(*) FROM turn_snapshots").fetchone()[0] == 1
 
 
-def test_version_and_native_gate_cover_tools_and_provider(host, monkeypatch):
+def test_api_and_native_gate_cover_tools_and_provider(host, monkeypatch):
     home, _ = host
     import hermes_cli
     host_version = hermes_cli.__version__
@@ -175,11 +177,18 @@ def test_version_and_native_gate_cover_tools_and_provider(host, monkeypatch):
     from hermes_kiokuko.compatibility import check_host, surface_is_compatible_and_selected
     from hermes_kiokuko.errors import KiokukoError
     from hermes_kiokuko.config import read_yaml, write_yaml
-    for version in ("0.20.9", "0.22.0", "unknown"):
+    for version in ("0.20.9", "0.22.0", "99.0.123", "unknown"):
         monkeypatch.setattr(hermes_cli, "__version__", version)
+        assert surface_is_compatible_and_selected()
+        assert KiokukoMemoryProvider().is_available()
+    monkeypatch.setattr(hermes_cli, "__version__", host_version)
+    from hermes_cli.plugins import PluginContext
+    with monkeypatch.context() as patch:
+        patch.delattr(PluginContext, 'register_middleware')
         assert not surface_is_compatible_and_selected()
         assert not KiokukoMemoryProvider().is_available()
-    monkeypatch.setattr(hermes_cli, "__version__", host_version)
+        with pytest.raises(KiokukoError, match='HOST_CONTRACT_MISMATCH'):
+            check_host(home)
     cfg = read_yaml(home / "config.yaml")
     cfg["memory"]["user_profile_enabled"] = True
     write_yaml(home / "config.yaml", cfg)

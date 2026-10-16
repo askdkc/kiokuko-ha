@@ -297,5 +297,8 @@ def test_doctor_distinguishes_api_checks_from_fixture_contract(host):
     from hermes_kiokuko.compatibility import host_contract_report
     result = host_contract_report()
     assert result['ok']
-    assert result['dispatch_contract']['status'] == 'tested_fixture_source_match'
+    dispatch = result['dispatch_contract']
+    assert dispatch['status'] in {'tested_fixture_source_match', 'unverified'}
+    assert bool(dispatch['commit']) is (dispatch['status'] == 'tested_fixture_source_match')
+    assert next(c for c in result['checks'] if c['name'] == 'agent.memory_manager.sync_roundtrip')['ok']
     assert result['dispatch_contract']['runtime_exercised'] is False

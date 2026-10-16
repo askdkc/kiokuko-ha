@@ -25,13 +25,18 @@ def host(tmp_path, monkeypatch):
     write_yaml(home / "config.yaml", cfg)
     hermes = pytest.importorskip("hermes_cli")
     root = Path(hermes.__file__).resolve().parent.parent
-    pins = json.loads((Path(__file__).with_name("pin.json")).read_text())
-    selected = os.environ.get("KIOKUKO_HERMES_FIXTURE", pins["default"])
-    manifest = pins["fixtures"][selected]
-    for path, checksum in manifest["files"].items():
-        assert hashlib.sha256((root / path).read_bytes()).hexdigest() == checksum, f"Unaudited host source: {path}"
+    # Default: exercise the selected installed/source host by capability. Exact
+    # identities belong only to explicitly requested historical reproductions.
+    selected = os.environ.get("KIOKUKO_HERMES_FIXTURE")
+    if selected:
+        pins = json.loads((Path(__file__).with_name("pin.json")).read_text())
+        manifest = pins["fixtures"][selected]
+        for path, checksum in manifest["files"].items():
+            assert hashlib.sha256((root / path).read_bytes()).hexdigest() == checksum, f"Historical host source mismatch: {path}"
     from gateway import session_context
     session_context.reset_session_vars()
+    from hermes_kiokuko.compatibility import check_host
+    check_host(home)
     from hermes_cli.plugins import _reset_plugin_managers_for_tests, get_plugin_manager
     _reset_plugin_managers_for_tests()
     manager = get_plugin_manager()

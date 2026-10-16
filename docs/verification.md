@@ -1,6 +1,136 @@
 # 検証記録
 
-2026-09-09時点。Orca監視・経験記憶とCodex Responses対応を含むコードを固定Hermesで検証済みです。release用の全環境matrixは未完了です。
+各結果は記載日時・対象環境の記録です。現在の再実行手順は以下を使用します。release用の全環境matrixは未完了です。
+
+## 現在の検証手順：能力で判定し、その回のビルドだけを使う
+
+Pythonは標準の[`tomllib`](https://docs.python.org/3/library/tomllib.html)を直接使うため
+`>=3.11`が必要です。未検証という理由だけで置いていたPythonとPyYAMLの上限を削除しました。
+TOMLの解析、PyYAMLの安全なroundtrip・型保持・Python object tagの拒否、Hermesの
+必須API・keyword・実同期動作を検査します。版数を書き換えた試験は能力判定の回帰試験であり、
+未実行のPython/PyYAML新版全体が動く証明ではありません。
+
+`--host`には検証したい実際のHermes checkoutを指定します。現在版の検証では
+`KIOKUKO_HERMES_FIXTURE`を設定しません。PM検証scriptの`--fixture`は、明示した旧版の
+checksumを再現するときだけ追加します。fixtureカタログは本番・現在版の許可リストではありません。
+
+以下は依存関係を用意した検証用venvで実行します。venv名はこのMacでの例です。
+`verification_support.py build`は毎回新しい出力先へsdist→wheelを作り、両方のmetadataが
+現在の`pyproject.toml`と一致することを確認してmanifestを返します。既存の`dist/`から
+古い配布物を選びません。manifestから取得するときも場所とSHA-256を確認します。
+
+```sh
+hermes_host=/absolute/path/to/hermes-agent
+unset KIOKUKO_HERMES_FIXTURE
+PYTHONPATH="$PWD/src:$hermes_host" .venv-py314/bin/python -m pytest -q
+manifest=$(.venv/bin/python scripts/verification_support.py build)
+wheel=$(.venv/bin/python scripts/verification_support.py artifact "$manifest" wheel)
+archive=$(.venv/bin/python scripts/verification_support.py artifact "$manifest" sdist)
+PYTHONPATH="$hermes_host" .venv-py314/bin/python scripts/verify_research_package.py "$wheel"
+.venv-py314/bin/python scripts/verify_native_plugin.py "$archive" --host "$hermes_host"
+.venv-py314/bin/python scripts/verify_pm_lifecycle.py "$archive" --host "$hermes_host"
+.venv-py314/bin/python scripts/verify_update_package.py "$wheel" --host "$hermes_host"
+```
+
+PMのAPIだけを先に調べる場合は、配布物を渡さず
+`verify_pm_lifecycle.py --host "$hermes_host" --check-host-only`を使えます。
+実導入の検証をこの事前検査だけで成功扱いにはしません。
+
+残す固定値は、自パッケージ版、標準APIに対応するPython下限と従来の依存下限、明示的な旧版回帰fixture、
+同梱Orcaコードのcommit・bundle hash・元lock解決値、DB/trace/wireの形式番号です。
+Nodeも版数比較を撤去し、同梱writerの実起動・protocol handshakeで判定します。traceや設定は作成せず、結果は実行ファイルとbundleの識別に対してcacheします。bundleのbuild targetはnode22のままです。
+読込済みコードとディスク上の版・fingerprintの照合は更新後の再起動診断です。
+
+この変更の限定検証では、Python/PyYAMLの旧制限で9件失敗し、修正後の現在host・原文探索・
+署名継続を含む67件が成功しました。一時コピーへ制限を戻すと同じ9件が失敗します。
+Nodeの版数だけ不明な正常runtimeは旧判定で失敗し、実writer検査とYAMLの型保持検査への修正後は関連80件が成功、
+旧判定を戻すと再び失敗します。API/keyword欠落、unsafe YAML、不正writer protocolも拒否します。
+現在hostでの実PM導入・更新・cold boot・失敗時の状態保持も成功しています。
+以下の685件はこの上限撤去とNode判定変更より前の結果です。現変更の全体試験は未実施です。
+
+## 2026-10-16：0.1.20のcontext失敗処理と署名のredaction衝突
+
+context準備が`STORE_BUSY` / `DEADLINE_EXCEEDED`で失敗した場合、通常のmodel・tool処理を
+続けながら、そのhookが新規作成したcaptureだけを`incomplete`として閉じます。
+同じturnへの重複hookや古いcaptureから別のcaptureを閉じないことも検証しました。
+署名なしのエラーcontextを配信成功にはせず、候補・経験・承認済み記憶を作成しません。
+doctorの`ok`は準備状態だけを示し、`answer_application_verified`は未確認の`null`です。
+
+最終試験で一度残ったstreaming captureは、限定28ケースでも再現しました。
+enqueue時とprovider受信時の記録から、delivery ID末尾の数字10桁と直後のHMACが
+HermesのTelegram token除去regexに一致し、署名が`***`になることを確認しました。
+署名前のASCII空白でこの衝突を避け、従来の空白なしmarkerも読み取ります。
+HMAC・本文digest・元user rowの検証条件は維持しています。
+
+- 数字8桁で終わるIDを固定した実AIAgent・HTTP streaming試験：修正前は1件失敗。
+- 修正後のCLI/Telegram・streaming/非streaming・2ターンの経験取得、context失敗、
+  monitor、旧新markerと原文・本文・署名改ざんの拒否：関連56件成功。
+- 公式Hermes 0.22.1 / Python 3.14.7の標準`pytest -q`：**685 passed**、
+  upstream非推奨API警告92件、141.89秒。skip・除外なし。試験中のソース変更なし。
+  Git外の専用一時ディレクトリと隔離profileを用い、終了後に専用一時物を削除。
+- timeout・待機時間・成功条件・依存上限・実行時の版数許可リストは追加・緩和していません。
+
+これは実HTTP transportをローカルの模擬modelで通した検証です。実モデルの回答への
+意味的な適用、実Gateway配送、remote CI、全Python/OS/Hermesの組合せは未確認です。
+以前の負荷試験で観測した0.5秒のcontext期限という制約も残ります。
+
+## 2026-10-16：Hermesの版数制限をAPI・同期動作検査に置換
+
+`0.21.x`正規表現と、版数不明時のfingerprint一致による起動制限を削除しました。
+release identityは表示にだけ使います。必要なmemory/plugin API、実際に渡すkeyword、
+Gatewayのsession ContextVarを検査し、`MemoryManager`の公開APIから静的な試験文字列を
+メモリ内の仮providerへ同期します。callback・messages・session ID・ContextVarの伝達を
+確認し、providerとexecutorを終了します。実装単位で結果をcacheし、通常のtool呼出しで
+毎回threadを生成しません。実メモリ、実ユーザーの文面、LLM、web検索、認証は使いません。
+
+- 公式[v0.22.1](https://github.com/NousResearch/hermes-agent/releases/tag/v0.22.1)のcommitは
+  `297552a9d646119871391d202509822cd86330df`。archiveと必要ソースのchecksumは
+  [pin.json](../tests/hermes_e2e/pin.json)の試験fixtureに記録しています。
+  これは実行時の許可リストではありません。stampのないarchiveも同じAPI検査を通します。
+- 公式main `6206f89320f3506c901948be0f487eae7f2b0d71`の必要APIは一次ソースで照合しました。
+  Skill登録は`hermes_cli.plugins_content`から`PluginContext`へ公開されています。
+  main全体の起動・依存解決をこの照合だけで確認済みとは扱いません。
+- 変更前はAPIが同じ0.22.1・将来minor/patch・major・版数不明の7ケースすべてが失敗。
+  修正後に旧`0.21.x`条件だけを一時コピーへ戻すmutationでも同じ7件が失敗しました。
+  この回帰試験は通常の`python -m pytest -q`で収集されます。
+- 必須APIの欠落、keyword非互換、同期callback欠落、payload/context伝達の不一致は拒否。
+  失敗箇所は`failed_checks`に示し、例外の自由文は出力しません。
+  実0.21.0/Python 3.14の壊れたexecutorは
+  `HOST_CONTRACT_MISMATCH / agent.memory_manager.sync_roundtrip / AttributeError`で拒否しました。
+  0.21.0/Python 3.12の検索・保存承認経路は成功しています。
+- 0.22.1で修正されたGatewayのID設定を受理しつつ、旧ID欠落を明示的に作る試験も維持。
+  sender/profile/sessionの拒否、native memoryの選択制約は緩めていません。
+
+全体監査では、Hermes releaseを制限する他の実行時条件はありませんでした。
+旧版に言及するidentity/SDK adapterのコメントは実際の互換処理の説明です。
+この時点で残っていたPython上限とPyYAML上限は、冒頭の現在の能力検査で撤去しました。
+Node監視bundleのbuild target、DB migration/checksum・Orca wire/traceの形式番号、
+loaded/disk版数の再起動診断は別の契約です。
+source fingerprintは引き続き検証履歴の表示だけです。
+
+実行結果：
+
+- Python 3.14.7 + 0.22.1、標準`pytest -q`：**681 passed**、hostの非推奨API警告92件。
+- Python 3.12.13 + 0.21.0：実AIAgent・検索・Gateway binding・診断の92件成功。
+- Python 3.14.7 + 旧現行`88c6085`：同じ92件成功。
+- wheelを一時targetへ実導入し、srcを検索pathから外した0.22.1試験：61件成功。
+  provider directory・entry point・Skill/ライセンス・診断も成功。
+- 0.22.1の実PMによるsdist依存解決・導入、候補→人の承認→永続化後の取得が成功。
+  wheelのoffline実再導入と0.21.4/0.22.1の実CLI/Gateway更新dispatchも成功。
+  更新job自体は模擬で、本番の更新は実行していません。
+- sdist→wheel作成、twine検査、compileall、`git diff --check`が成功。
+
+並行して複数の重い検証を動かした全体試験では、既存の0.5秒期限内に処理できず
+`STORE_BUSY`/`DEADLINE_EXCEEDED`に関連する3件が失敗しました。監視の単独13件と、
+並行負荷を外した上記681件では成功。期限・DB設定・成功条件を変更せず再確認しています。
+負荷時に記憶contextを提供できない場合があるという既存の制約は残ります。
+
+再実行には冒頭の現在の検証手順を使用します。以下の結果は記載したfixtureに対する過去の実行記録です。
+
+一時profileの実Hermes dispatcher・AIAgent・middleware・SessionDB・PMを使用します。
+外部LLM/web配送は模擬で、実モデルの品質、最新mainの全体実行、実Gatewayの配送は未確認です。
+本番設定・auth・メモリDB・サービス、他repository、公開版数は変更していません。
+commit/tag/push/公開は行っていません。静的型検査の設定はこのrepositoryにはありません。
 
 ## 2026-10-06：Python 3.14と現行PMの検証
 
@@ -10,20 +140,19 @@
 - 配布元と同じ追跡対象ファイル＋追加ファイルのsnapshotは、現行Hermes Plugin Guardで`safe`。防御用正規表現の拒否動作も保持。
 - Python 3.14のwheel実導入・再導入：0.21.0を起動時に拒否し、0.21.4のregistryとGateway/CLI更新経路は成功。更新jobは模擬で、wheel導入自体は実pipのoffline導入。
 
-現在のHermesは`__version__`が0.0.0でもcanonicalな`get_version_info()`にrelease identityを持つ場合があるため、そちらを確認します。stampもGit情報もない0.0.0は、上記固定ソースのfingerprintとPython 3.14が一致する場合だけ許可します。別の未知sourceを一律許可しません。
+この時点では`__version__`が0.0.0の場合にcanonicalな`get_version_info()`を確認し、identityもない場合は固定ソースのfingerprintとPython 3.14の一致を要求していました。この版数・fingerprintによる起動制限は、2026-10-16のAPI・同期動作検査で置き換えています。
 
 native版はPMへ更新を委ねます。旧pip用の自己更新は保持しているため、導入検査の合格を公式カタログ規約の承認とは扱いません。GitHubへのpush、PyPI公開、公式カタログ掲載、利用者Gatewayへの導入・再起動・実ネットワーク配送は未実施です。このリポジトリにGitHub Actionsの検証workflowはなく、リモートCI成功は主張しません。
 
-再実行（現行hostとその依存関係を用意し、localhost待受を許可した環境）：
+この日時の旧hostを明示して再現する場合（配布物`$archive`は冒頭の現ビルド手順から取得）：
 
 ```sh
 .venv-py314/bin/python scripts/fetch_hermes_fixture.py --fixture current-88c6085
 KIOKUKO_HERMES_FIXTURE=current-88c6085 \
   PYTHONPATH="$PWD/src:$PWD/.cache/hermes-current-88c6085" \
   .venv-py314/bin/python -m pytest tests/unit tests/integration tests/hermes_e2e -q
-.venv-py314/bin/python -m build --no-isolation
-.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.17.tar.gz \
-  --host .cache/hermes-current-88c6085
+.venv-py314/bin/python scripts/verify_native_plugin.py "$archive" \
+  --host .cache/hermes-current-88c6085 --fixture current-88c6085
 ```
 
 native検証scriptは`.cache`内の使い捨てprofileとworkspaceだけを使います。PM fixtureの呼出元には`tomli-w`等の現行PM依存関係とPython 3.14、実uvが必要です。ネットワークが必要なのは依存関係の解決・取得で、実LLMやGatewayの外部送信は使いません。
@@ -89,7 +218,7 @@ python3.12 -m venv .venv
 Hermes統合試験は固定hostを別途installします。取得scriptは既存の`.cache/hermes`を上書きしません。archive checksumが変わった場合も停止します。
 
 ```sh
-.venv/bin/python scripts/fetch_hermes_fixture.py
+.venv/bin/python scripts/fetch_hermes_fixture.py --fixture 0.21.0
 .venv/bin/python -m pip install -e .cache/hermes
 .venv/bin/python -m pytest tests/hermes_e2e -q
 .venv/bin/python scripts/fetch_hermes_fixture.py --fixture 0.21.4
@@ -116,24 +245,23 @@ contextのコピーも消費状態を共有します。照合に失敗したGate
 認証後のI/Oは従来のto_threadに残し、CLIのloop拒否、pipのpackage/index/venv制約を維持します。
 Hermes 0.21.4で移動したSDK変換helperは新moduleから取得し、0.21.0の経路も維持します。
 
-doctorのhost_contract.okはimport/API検査の結果です。dispatch_contractは固定ソースの
+doctorのhost_contract.okはimport/APIとメモリ内同期試験の結果です。dispatch_contractは固定ソースの
 fingerprint一致を別に示します。runtime_exercised=falseのため、doctorだけで実Gateway配送が
-成功したとは判断できません。未検証sourceはunverifiedです。0.0.0の扱いは上記の現行PM検証に記載しています。
-Pythonの対応範囲は3.11〜3.14です。3.14ではHermes 0.21.4以降が必要です。0.21.0のDaemonThreadPoolExecutorは削除された_initializer/_initargsを参照し、記憶同期に失敗するため起動時に拒否します。3.15以降はpackage metadataと起動時検査の両方で拒否します。
+成功したとは判断できません。未検証sourceはunverifiedです。fingerprint不一致だけでは起動を拒否しません。
+現在はPython 3.11以降で上限なしです。Hermesの版数は制限せず、必要なAPIと記憶同期の動作で判定します。旧0.21.0のDaemonThreadPoolExecutorはPython 3.14で削除された_initializer/_initargsを参照するため、版数条件ではなく実同期の失敗で拒否されます。
 
 両hostを別processで実行します。archive/source checksum不一致は失敗とし、module cacheを
 混在させません。localhost模擬HTTP serverを使うsuiteにはloopback listenerの許可が必要です。
 GatewayRunnerとCLIは部分初期化し、認証結果・transport・pipは模擬です。
 通常startup、実Telegram配送、PyPIでの公開後更新は別途確認が必要です。
 
-wheel導入後の試験（両fixtureと現在のtest依存関係が必要）:
+wheel導入後の試験（`$wheel`と`$hermes_host`は冒頭の手順で準備）:
 
 ```sh
-.venv/bin/python -m build --no-isolation
-.venv/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.17-py3-none-any.whl
+.venv/bin/python scripts/verify_update_package.py "$wheel" --host "$hermes_host"
 ```
 
-このscriptは使い捨てvenvへローカルwheelを実pipで2回導入し、両hostのregistry・実Gateway
+このscriptは使い捨てvenvへローカルwheelを実pipで2回導入し、選択したhostのregistry・実Gateway
 dispatch・CLI process_commandを検査します。Gatewayからのpip更新は模擬であり、実pip試験は
 offlineのローカルwheel再導入です。本番PyPIや利用者のHermes環境にはアクセスしません。
 
@@ -148,10 +276,9 @@ cancel後のjob観測とlock解放、CLIの4操作、monitor/research/curation�
 `runtime_provenance` は読み込み済みコードと現在の PM 選択を照合します。同じ Python・同じ版でも foreign source、旧 generation、同一版のコード変更を区別します。標準ライブラリだけの directory entry 診断は、package 欠落と内部依存欠落を分け、元の例外を再送出します。
 
 ```sh
-.venv-py314/bin/python -m build --no-isolation
-.venv-py314/bin/python scripts/verify_native_plugin.py dist/hermes_kiokuko-0.1.17.tar.gz --host .cache/hermes-current-88c6085
-.venv-py314/bin/python scripts/verify_pm_lifecycle.py dist/hermes_kiokuko-0.1.17.tar.gz --host .cache/hermes-current-88c6085
-.venv-py314/bin/python scripts/verify_update_package.py dist/hermes_kiokuko-0.1.17-py3-none-any.whl
+.venv-py314/bin/python scripts/verify_native_plugin.py "$archive" --host "$hermes_host"
+.venv-py314/bin/python scripts/verify_pm_lifecycle.py "$archive" --host "$hermes_host"
+.venv-py314/bin/python scripts/verify_update_package.py "$wheel" --host "$hermes_host"
 ```
 
 公開PM試験は使い捨てhomeへhostをコピーし、ローカルGit fixtureを公開install/updateコマンドで導入します。Hermesの通常ランチャー生成APIによる同一コマンドから起動し、bootstrapの環境選択で4 commands・3 tools・provider lifecycleを確認し、同一版更新前からのprocessと再起動後を照合します。無効なTOMLで更新を拒否した際、selection・config・DB・別profileが保持されることも検査します。Kiokukoのsrc/site-packagesを試験から注入しません。初期host依存には呼出元の検証用venvを使い、以降のgenerationはPMが作ります。管理toolchainと依存の取得にはネットワークが必要です。

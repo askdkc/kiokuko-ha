@@ -80,7 +80,8 @@ def test_gateway_normal_setup_search_proposal_approval_recall(host, platform):
 
 
 @pytest.mark.parametrize("publish_initial", [False, True])
-def test_gateway_cached_turn_binding(host, publish_initial):
+@pytest.mark.parametrize("missing_id", [False, True])
+def test_gateway_cached_turn_binding(host, publish_initial, missing_id):
     home, _ = host
     from agent.agent_init import _publish_session_id
     from agent.turn_context import _collect_pre_llm_call_context
@@ -119,11 +120,18 @@ def test_gateway_cached_turn_binding(host, publish_initial):
     results = []
     for number in range(3):
         tokens = run.GatewayRunner._set_session_env(runner, context)
+        missing_token = None
         try:
-            assert sc._VAR_MAP['HERMES_SESSION_ID'].get() == ''
+            # Actual host binding may publish the ID or have the old cached-agent
+            # omission. Explicitly retain missing-ID coverage even on fixed hosts.
+            assert sc._VAR_MAP['HERMES_SESSION_ID'].get() in ('', context.session_id)
+            if missing_id:
+                missing_token = sc._VAR_MAP['HERMES_SESSION_ID'].set('')
             # The Gateway copies each inbound task's context into the agent worker.
             results.append(contextvars.copy_context().run(turn, number))
         finally:
+            if missing_token is not None:
+                sc._VAR_MAP['HERMES_SESSION_ID'].reset(missing_token)
             sc.clear_session_vars(tokens)
     assert all(result['ok'] is True and result['data']['state'] == 'pending' for _, result in results)
     # The callback ID cannot authorize a different sender in the same DM session.
@@ -245,6 +253,9 @@ def test_concurrent_empty_gateway_ids_cannot_cross_sessions(host):
         context = SessionContext(source=source, session_key=sender + '-key', session_id=sender,
                                  connected_platforms=[], home_channels={})
         tokens = run.GatewayRunner._set_session_env(SimpleNamespace(adapters={}), context)
+        assert sc._VAR_MAP['HERMES_SESSION_ID'].get() in ('', sender)
+        # Exercise the omission deliberately; newer hosts bind the ID correctly.
+        missing_token = sc._VAR_MAP['HERMES_SESSION_ID'].set('')
         try:
             assert sc._VAR_MAP['HERMES_SESSION_ID'].get() == ''
             pre_llm_call(session_id=sender, turn_id='turn', platform='photon', user_message='hello')
@@ -255,6 +266,7 @@ def test_concurrent_empty_gateway_ids_cannot_cross_sessions(host):
             assert propose(sender)['ok'] is True
             assert propose(other) == {'ok': False, 'error': 'TOOL_CONTEXT_MISMATCH'}
         finally:
+            sc._VAR_MAP['HERMES_SESSION_ID'].reset(missing_token)
             sc.clear_session_vars(tokens)
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:

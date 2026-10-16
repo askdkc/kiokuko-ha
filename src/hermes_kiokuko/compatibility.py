@@ -1,4 +1,7 @@
 import hashlib
+from io import BytesIO
+from contextvars import ContextVar
+from functools import lru_cache
 import importlib.util
 import inspect
 from pathlib import Path
@@ -8,10 +11,9 @@ import tomllib
 
 from .config import load_config, validate_native
 from .errors import KiokukoError
+from .models import canonical
 
-AUDITED_SHA = "13e72fb205b735df679e0fd5f5996a34ac4accc6"
-
-
+# Historical diagnostics only. Source fingerprints never decide admission.
 AUDITED_DISPATCH_SOURCES = {'0.21.0': {'commit': '13e72fb205b735df679e0fd5f5996a34ac4accc6',
             'files': {'gateway/run_inbound.py': '8b983ea50a991d5ec8512062f8baea73a3e4a9aec8a6093fe7b19004f0f7d45c',
                       'gateway/run.py': '0ac228aa6f766474013565e24aa65d87cea992f5e665e4de2bb5782e5fd3848e',
@@ -64,13 +66,99 @@ def active_home() -> Path:
     return Path(get_hermes_home()).resolve()
 
 
+_SYNC_PROBE = ContextVar('kiokuko_host_sync_probe', default=None)
+
+
+@lru_cache(maxsize=8)
+def _toml_probe(load, loads):
+    try:
+        text = 'enabled = true\nlabel = "日本語"'
+        expected = {'enabled': True, 'label': '日本語'}
+        return {'ok': canonical(loads(text)) == canonical(expected)
+                and canonical(load(BytesIO(text.encode()))) == canonical(expected)}
+    except Exception as error:
+        return {'ok': False, 'reason': type(error).__name__}
+
+
+@lru_cache(maxsize=8)
+def _yaml_probe(load, dump, error_type):
+    """Check the safe operations used for configuration, without files or tags
+    that could execute code. Version metadata is deliberately irrelevant.
+    """
+    try:
+        expected = {'enabled': True, 'label': '日本語', 'values': [None, 3, 'true']}
+        rendered = dump(expected, allow_unicode=True, sort_keys=False)
+        if not isinstance(rendered, str):
+            return {'ok': False, 'reason': 'YAML_DUMP_TYPE_MISMATCH'}
+        if canonical(load(rendered)) != canonical(expected):
+            return {'ok': False, 'reason': 'YAML_ROUNDTRIP_MISMATCH'}
+        try:
+            load('!!python/object:kiokuko_probe {}')
+        except error_type:
+            return {'ok': True}
+        return {'ok': False, 'reason': 'YAML_UNSAFE_TAG_ACCEPTED'}
+    except Exception as error:
+        return {'ok': False, 'reason': type(error).__name__}
+
+
+@lru_cache(maxsize=8)
+def _memory_sync_probe(manager_type, methods):
+    """Exercise the host's public sync path with only static, in-memory data.
+
+    Release numbers cannot detect broken executor backports or compatible future
+    hosts. Cache by implementation, not release metadata. This creates no real
+    provider, session, config, DB, credential, or network client.
+    """
+    observed = []
+    messages = [{'role': 'user', 'content': 'Kiokuko compatibility probe'}]
+
+    class ProbeProvider:
+        # Builtin avoids external-provider profile configuration/spill setup.
+        name = 'builtin'
+
+        def get_tool_schemas(self):
+            return []
+
+        def sync_turn(self, user_content, assistant_content, *, session_id='', messages=None):
+            observed.append((user_content, assistant_content, session_id, messages, _SYNC_PROBE.get()))
+
+        def shutdown(self):
+            pass
+
+    manager = None
+    token = _SYNC_PROBE.set('probe-context')
+    result = {'ok': False, 'reason': 'SYNC_CALLBACK_NOT_OBSERVED'}
+    try:
+        manager = manager_type()
+        manager.add_provider(ProbeProvider())
+        manager.sync_all('Kiokuko compatibility probe', 'Probe response',
+                         session_id='kiokuko-compatibility-probe', messages=messages)
+        drained = manager.flush_pending(timeout=1.0)
+        expected = ('Kiokuko compatibility probe', 'Probe response',
+                    'kiokuko-compatibility-probe', messages, 'probe-context')
+        if drained and observed == [expected]:
+            result = {'ok': True}
+        elif observed:
+            result = {'ok': False, 'reason': 'SYNC_PAYLOAD_OR_CONTEXT_MISMATCH'}
+    except Exception as error:
+        result = {'ok': False, 'reason': type(error).__name__}
+    finally:
+        _SYNC_PROBE.reset(token)
+        if manager is not None:
+            try:
+                manager.shutdown_all()
+            except Exception as error:
+                result = {'ok': False, 'reason': 'SHUTDOWN_' + type(error).__name__}
+    return result
+
+
 def host_contract_report():
     """Report the exact import/API checks without dumping arbitrary exception text."""
     import importlib
     _prepare_host_imports()
     modules = {}
     checks = []
-    names = ('hermes_cli', 'agent.memory_provider', 'agent.turn_context',
+    names = ('hermes_cli', 'agent.memory_provider', 'agent.memory_manager', 'agent.turn_context',
              'agent.auxiliary_client', 'gateway.session_context',
              'hermes_cli.middleware', 'hermes_cli.plugins', 'hermes_constants', 'yaml')
     for name in names:
@@ -95,24 +183,22 @@ def host_contract_report():
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError):
             pass
     dispatch = dispatch_contract_report(modules.get('hermes_cli'), version)
-    version_match = re.fullmatch(r"0\.21\.(\d+)(?:[-+][\w.]+)?", version) if isinstance(version, str) else None
-    # Earlier hosts use CPython's pre-3.14 private executor API and lose sync jobs.
-    supported = (bool(version_match) and (3, 11) <= sys.version_info[:2] < (3, 15)
-                 and (sys.version_info[:2] < (3, 14) or int(version_match[1]) >= 4))
-    if version == '0.0.0':
-        supported = (sys.version_info[:2] == (3, 14)
-                     and dispatch['status'] == 'tested_fixture_source_match')
-    checks.append({'name': 'supported_version', 'ok': bool(supported),
-                   'hermes_version': version, 'python_version': list(sys.version_info[:2])})
+    checks.append({'name': 'python.tomllib.parse',
+                   **_toml_probe(getattr(tomllib, 'load', None), getattr(tomllib, 'loads', None))})
     contracts = [
         ('agent.memory_provider', 'MemoryProvider.sync_turn', {'messages'}),
         ('agent.memory_provider', 'MemoryProvider.on_session_switch', {'rewound'}),
+        *[('agent.memory_manager', 'MemoryManager.' + name, required) for name, required in
+          [('add_provider', None), ('sync_all', {'session_id', 'messages'}),
+           ('flush_pending', {'timeout'}), ('shutdown_all', None)]],
         ('agent.turn_context', 'compose_user_api_content', None),
         ('agent.auxiliary_client', 'call_llm', {'task', 'messages', 'timeout'}),
         ('hermes_cli.middleware', 'run_tool_execution_middleware', None),
         *[('hermes_cli.plugins', 'PluginContext.' + name, None) for name in
           ('register_hook', 'register_middleware', 'register_tool', 'register_cli_command', 'register_command', 'register_skill')],
         ('hermes_constants', 'get_hermes_home', None),
+        ('yaml', 'safe_load', None),
+        ('yaml', 'safe_dump', {'allow_unicode', 'sort_keys'}),
     ]
     for module_name, attribute, required in contracts:
         value = modules.get(module_name)
@@ -121,23 +207,38 @@ def host_contract_report():
         check = {'name': module_name + '.' + attribute, 'ok': callable(value)}
         if required is not None and callable(value):
             try:
-                parameters = set(inspect.signature(value).parameters)
-                check.update(ok=required <= parameters, required_parameters=sorted(required),
-                             actual_parameters=sorted(parameters))
+                parameters = inspect.signature(value).parameters
+                keyword_parameters = {name for name, parameter in parameters.items()
+                                      if parameter.kind in (parameter.POSITIONAL_OR_KEYWORD,
+                                                            parameter.KEYWORD_ONLY)}
+                accepts_kwargs = any(p.kind == p.VAR_KEYWORD for p in parameters.values())
+                check.update(ok=accepts_kwargs or required <= keyword_parameters,
+                             required_parameters=sorted(required), actual_parameters=sorted(parameters))
             except (TypeError, ValueError):
                 check.update(ok=False, reason='SIGNATURE_UNAVAILABLE')
         checks.append(check)
     variables = getattr(modules.get('gateway.session_context'), '_VAR_MAP', None)
     checks.append({'name': 'gateway.session_context.HERMES_SESSION_ID',
                    'ok': isinstance(variables, dict) and 'HERMES_SESSION_ID' in variables})
+    yaml = modules.get('yaml')
+    yaml_error = getattr(yaml, 'YAMLError', None)
+    checks.append({'name': 'yaml.YAMLError', 'ok': isinstance(yaml_error, type)
+                   and issubclass(yaml_error, Exception)})
+    if all(c['ok'] for c in checks if c['name'].startswith(('import:yaml', 'yaml.'))):
+        checks.append({'name': 'yaml.safe_roundtrip',
+                       **_yaml_probe(yaml.safe_load, yaml.safe_dump, yaml_error)})
+    manager_type = getattr(modules.get('agent.memory_manager'), 'MemoryManager', None)
+    manager_checks = [c for c in checks if c['name'].startswith('agent.memory_manager.')]
+    if callable(manager_type) and manager_checks and all(c['ok'] for c in manager_checks):
+        methods = tuple(getattr(manager_type, name) for name in
+                        ('add_provider', 'sync_all', 'flush_pending', 'shutdown_all'))
+        checks.append({'name': 'agent.memory_manager.sync_roundtrip',
+                       **_memory_sync_probe(manager_type, methods)})
     failed = [c for c in checks if not c['ok']]
-    # Preserve established failure codes. A failed import is not proof of an
-    # unsupported version; the version is simply unknown in that case.
-    code = ('UNSUPPORTED_HERMES' if modules.get('hermes_cli') is not None and not supported
-            else 'HOST_CONTRACT_MISMATCH') if failed else None
+    code = 'HOST_CONTRACT_MISMATCH' if failed else None
     return {'ok': not failed, 'error': code, 'hermes_version': version,
             'checks': checks, 'failed_checks': failed,
-            'scope': 'import_and_api_checks',
+            'scope': 'import_api_and_sync_probe',
             'dispatch_contract': dispatch}
 
 

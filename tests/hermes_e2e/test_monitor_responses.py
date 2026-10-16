@@ -164,8 +164,8 @@ def test_photon_codex_capture_extract_and_recall(host, codex_http, stream):
     def run_gateway_turn(message, task_id):
         tokens = GatewayRunner._set_session_env(SimpleNamespace(adapters={}), context)
         try:
-            # Unmodified Hermes: cached inbound turns have an explicitly empty ID.
-            assert sc._VAR_MAP['HERMES_SESSION_ID'].get() == ''
+            # Actual host scope: old cached-agent omission or the fixed binding.
+            assert sc._VAR_MAP['HERMES_SESSION_ID'].get() in ('', context.session_id)
             return contextvars.copy_context().run(agent.run_conversation, message,
                                                  conversation_history=[], task_id=task_id)
         finally:

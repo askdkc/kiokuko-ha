@@ -2,6 +2,13 @@
 
 # 運用と境界
 
+`doctor`/`status`の`ok`は準備状態の検査結果です（`ok_scope=readiness_checks_only`）。
+記憶が取得されたことや回答へ適用されたことは意味しません。
+`answer_application_verified=null`は適用未検証を示します。
+`observed_in_history`も入力履歴への存在の証拠で、回答への適用の証拠ではありません。
+context準備が失敗したturnは失敗コードを表示し、開始済みの自身の監視captureを
+`incomplete`として閉じます。記憶を取得したとは扱わず、通常のtool実行と応答は続行できます。
+
 ## 設定と互換性
 
 一般pluginのentry pointはmoduleを公開し、MemoryProvider側はregister関数を公開します。Hermes 0.21の二つのloaderが受理する形が異なるためです。
@@ -191,6 +198,8 @@ passive captureはcompleted turnの短い原文抜粋だけを候補化します
 一般hookがsnapshot、定型操作、訂正、検索、署名markerの順に処理します。providerのprefetchは空文字列、queue_prefetchはno-opです。
 
 `prepared`はcontextを生成した状態です。後続hookかcompleted同期で、署名・本文digest・元user rowを確認したときだけ`observed_in_history`になります。toolで手動取得した記憶も、提示した可能性があるものとして訂正対象へ記録しますが、履歴確認を偽装しません。
+
+署名markerはIDと署名の間に空白を置きます。ID末尾が数字8桁以上の場合でもHermesの秘密情報除去がTelegram tokenと誤認しないための区切りです。既存の空白なしmarkerも検証でき、HMAC・本文digest・元user rowの確認条件は同じです。
 
 branch/圧縮の親関係はhostの明示IDだけから継承します。markerが圧縮で消えた場合、必要な無効化情報を再提示できます。大量の訂正は、過去のKiokuko context全体を無効とする短い通知へまとめます。
 

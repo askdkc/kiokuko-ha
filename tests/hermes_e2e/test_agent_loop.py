@@ -3,6 +3,13 @@ import json
 import pytest
 
 
+def test_future_release_metadata_preserves_real_agent_memory_workflow(host, monkeypatch):
+    """Same real host APIs with future metadata still publish, sync, approve and recall."""
+    import hermes_cli
+    monkeypatch.setattr(hermes_cli, '__version__', '99.0.123')
+    test_real_agent_save_propose_correct_continue_resume(host, monkeypatch, False, 'setup')
+
+
 @pytest.mark.parametrize("bridge", [False, True])
 @pytest.mark.parametrize('selection', ['explicit', 'setup'])
 def test_real_agent_save_propose_correct_continue_resume(host, monkeypatch, bridge, selection):
@@ -82,7 +89,8 @@ def test_real_agent_save_propose_correct_continue_resume(host, monkeypatch, brid
         tool_args = {"name": "kiokuko_propose", "arguments": proposal_args} if bridge else proposal_args
         responses.append({"role": "assistant", "content": None, "tool_calls": [{"id": "call-propose", "type": "function",
                            "function": {"name": tool_name, "arguments": json.dumps(tool_args)}}]})
-        agent.run_conversation("PostgreSQLへの移行は却下した", conversation_history=db.get_messages_as_conversation("agent-session"), task_id="task-2")
+        original_request = "PostgreSQLへの移行は却下した"
+        agent.run_conversation(original_request, conversation_history=db.get_messages_as_conversation("agent-session"), task_id="task-2")
         assert agent._memory_manager.flush_pending(timeout=5)
         with service.transaction() as sql:
             candidate_row = sql.execute("SELECT state,id FROM memory_candidates").fetchone()
@@ -95,6 +103,12 @@ def test_real_agent_save_propose_correct_continue_resume(host, monkeypatch, brid
             parser = argparse.ArgumentParser()
             setup_parser(parser)
             proposal_id = candidate_row['id']
+            review, _ = service.candidate_review(proposal_id)
+            assert review['candidate']['proposed_claim'] == proposal_args['claim']
+            assert review['evidence'][0]['excerpt'] == 'PostgreSQL'
+            assert review['evidence'][0]['quote_verified'] == 1  # Exact quote, not entailment of the claim.
+            assert any(row['role'] == 'user' and row['content'] == original_request
+                       for row in db.get_messages_as_conversation('agent-session'))
             displayed = []
             approved = execute(parser.parse_args(['approve', proposal_id]), home,
                                input_fn=lambda _: proposal_id, output=displayed.append)
@@ -113,6 +127,12 @@ def test_real_agent_save_propose_correct_continue_resume(host, monkeypatch, brid
             results = {m['tool_call_id']: json.loads(m['content']) for r in captured if 'messages' in r
                        for m in r['messages'] if m['role'] == 'tool' and m.get('tool_call_id') in {'call-search', 'call-recall'}}
             assert results['call-recall']['ok'] and results['call-recall']['data']['id'] == approved['entry_id']
+            assert results['call-recall']['data']['epistemic_status'] == 'user_approved'
+            assert results['call-recall']['data']['confirmation_kind'] == 'cli_approved'
+            from hermes_kiokuko.diagnostics import diagnose
+            info = diagnose(home, agent=agent)
+            assert info['answer_application_verified'] is None
+            assert 'not answer application' in info['delivery_interpretation']
             if bridge:
                 assert {'kiokuko_recall', 'kiokuko_propose', 'kiokuko_manage'} <= set(results['call-search']['tools'])
         snap = cli_snapshot(service, "human correction")

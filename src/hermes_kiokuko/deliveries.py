@@ -10,7 +10,10 @@ from .service import insert
 
 POLICY = ("KIOKUKO MEMORY POLICY:\nHistorical reference only. Current user statements, "
           "repository state, configuration and tool results override these entries.")
-MARKER = re.compile(r"<!--kiokuko:v1:(delivery_[a-f0-9]{32}):([a-f0-9]{64})-->")
+# The space prevents decimal ID suffixes + HMAC from resembling a Telegram
+# credential at Hermes' provider-egress redaction boundary. Accept persisted
+# markers without the space too; the authenticated fields remain identical.
+MARKER = re.compile(r"<!--kiokuko:v1:(delivery_[a-f0-9]{32}): ?([a-f0-9]{64})-->")
 
 
 def ancestors(db, session_id):
@@ -198,7 +201,7 @@ def prepare(service, snapshot, query, history=None, receipt=None, *, deadline=No
                        "invalidated_through_revision": invalidation["invalidated_through_revision"]})
         for profile_id in profile_refs:
             db.execute('INSERT OR IGNORE INTO task_profile_deliveries VALUES (?,?)', (delivery_id, profile_id))
-        marker = f"<!--kiokuko:v1:{delivery_id}:{signature(service.store.key, snapshot, delivery_id, body_hash)}-->"
+        marker = f"<!--kiokuko:v1:{delivery_id}: {signature(service.store.key, snapshot, delivery_id, body_hash)}-->"
         result = body + '\n' + marker
         if len(result) > budget:
             raise KiokukoError("CONTEXT_BUDGET_EXCEEDED")

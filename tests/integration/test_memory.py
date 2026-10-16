@@ -79,15 +79,23 @@ def test_correction_independent_of_query(service, make_turn, query):
     assert "KIOKUKO CORRECTION" not in prepare(service, make_turn(session="reset"), "continue", [])
 
 
-def test_prepared_not_observed_and_forgery(service, make_turn):
+@pytest.mark.parametrize('legacy_marker', [False, True])
+def test_prepared_not_observed_and_forgery(service, make_turn, legacy_marker):
     snap = make_turn("raw")
     context = prepare(service, snap, "raw")
+    if legacy_marker:
+        context = ':'.join(context.rsplit(': ', 1))
     with service.transaction() as db:
         assert db.execute("SELECT state FROM retrieval_deliveries").fetchone()[0] == "prepared"
     with pytest.raises(KiokukoError, match="SYNC_CONTEXT_UNAVAILABLE"):
         sync_completed(service, snap.session_id, "raw", history("other raw", context))
     with pytest.raises(KiokukoError, match="SYNC_CONTEXT_UNAVAILABLE"):
         sync_completed(service, snap.session_id, "raw", history("raw", context.replace("Historical", "Forged")))
+    from hermes_kiokuko.deliveries import MARKER
+    sig = MARKER.search(context).group(2)
+    forged = sig[:-1] + ('0' if sig[-1] != '0' else '1')
+    with pytest.raises(KiokukoError, match="SYNC_CONTEXT_UNAVAILABLE"):
+        sync_completed(service, snap.session_id, "raw", history("raw", context.replace(sig, forged)))
     sync_completed(service, snap.session_id, "raw", history("raw", context))
     with service.transaction() as db:
         assert db.execute("SELECT state FROM retrieval_deliveries").fetchone()[0] == "observed_in_history"

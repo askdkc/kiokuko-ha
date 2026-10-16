@@ -51,6 +51,8 @@ def diagnose(home, *, running=False, load_plugin=False, platform='cli', agent=No
               'profile_path': str(home), 'package_path': str(Path(__file__).parent),
               'version': __version__, 'runtime': 'gateway_loaded' if running else 'cli_process',
               'gateway_loaded': True if running else None,
+              'ok_scope': 'readiness_checks_only',
+              'answer_application_verified': None,
               'memory_provider_initialized_in_this_process': provider_ready(home), 'schema': SCHEMA_VERSION,
               'delivery_interpretation': 'observed_in_history proves input presence, not answer application',
               'errors': [], 'deliveries': {}, 'candidates': {}, 'operations': {},

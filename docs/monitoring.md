@@ -4,7 +4,7 @@ The optional monitor records Hermes **middleware requests and responses** with t
 
 ## Enable
 
-Install Node.js 22.12 or later separately, then use the interactive Hermes CLI or a Gateway chat in the intended profile:
+Install Node.js separately, then use the interactive Hermes CLI or a Gateway chat in the intended profile. Readiness loads the actual bundled writer and verifies its protocol handshake, without writing a trace. Runtime version strings do not decide admission; the bundle build target remains `node22`.
 
 ```text
 /kiokuko-monitor enable

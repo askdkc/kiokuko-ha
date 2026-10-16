@@ -14,6 +14,8 @@ import sys
 import tarfile
 import tempfile
 
+from verification_support import verify_host
+
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = '''
 import hermes_bootstrap
@@ -47,14 +49,18 @@ for line in sys.stdin:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('archive', type=Path)
+    parser.add_argument('archive', type=Path, nargs='?')
     parser.add_argument('--host', type=Path, required=True)
+    parser.add_argument('--fixture', help='Opt-in checksum identity for a historical regression fixture')
+    parser.add_argument('--check-host-only', action='store_true', help='Check current PM APIs without installing anything')
     args = parser.parse_args()
     host = args.host.resolve()
-    pin = json.loads((ROOT / 'tests/hermes_e2e/pin.json').read_text())['fixtures']['current-88c6085']
-    import hashlib
-    for name, digest in pin['files'].items():
-        assert hashlib.sha256((host / name).read_bytes()).hexdigest() == digest, name
+    report = verify_host(host, args.fixture)
+    if args.check_host_only:
+        print(json.dumps(report))
+        return
+    if args.archive is None:
+        parser.error('archive is required unless --check-host-only is used')
     with tempfile.TemporaryDirectory(prefix='pm-lifecycle-', dir=ROOT / '.cache') as directory:
         root = Path(directory)
         home = root / '.hermes'

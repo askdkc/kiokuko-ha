@@ -120,6 +120,7 @@ class Monitor:
             except Exception:
                 capture.closed = True
                 raise
+            return capture
 
     def next_observation(self, snap):
         with self.lock:
@@ -170,13 +171,14 @@ class Monitor:
                 # A full queue cannot lose the only completion signal. Writer scans closed runs.
                 runtime.record_status('MONITOR_QUEUE_FULL')
 
-    def abort(self, snap):
+    def abort(self, snap, *, expected=None, code=None):
         with self.lock:
             capture = self.captures.get(snap.key)
-            if not capture or capture.closed:
+            if not capture or capture.closed or (expected is not None and capture is not expected):
                 return
             capture.closed = capture.aborted = True
             capture.dropped += 1
+            capture.error_code = capture.error_code or code
             try:
                 self._enqueue(capture, 'abort', {})
             except KiokukoError:

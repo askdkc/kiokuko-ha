@@ -1,5 +1,6 @@
 """Pinned Orca subprocess and strictly checked, managed trace reads."""
 import hashlib
+from functools import lru_cache
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,24 @@ RUN_PATTERN = re.compile(r'run_[0-9a-f]{32}\Z')
 MAX_EVENT = 1 << 20
 
 
+@lru_cache(maxsize=8)
+def _node_probe(node, binary_identity, bundle_digest):
+    """Load the actual writer without opening a trace or inheriting credentials.
+
+    Cache by executable identity and verified bundle, never version metadata.
+    The hello operation does not use its root argument or touch the filesystem.
+    """
+    frame = {'version': 1, 'id': 'kiokuko-runtime-probe', 'op': 'hello'}
+    try:
+        result = subprocess.run([node, str(ASSETS / 'bridge.mjs'), os.devnull],
+            input=canonical(frame) + '\n', capture_output=True, text=True,
+            timeout=3, check=True, env={'PATH': os.defpath})
+        return json.loads(result.stdout) == {
+            'version': 1, 'id': frame['id'], 'ok': True, 'protocol': 1}
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return False
+
+
 def runtime_check():
     node = shutil.which('node')
     if not node:
@@ -27,9 +46,10 @@ def runtime_check():
     if hashlib.sha256((ASSETS / 'bridge.mjs').read_bytes()).hexdigest() != pin['bundle_sha256']:
         raise KiokukoError('MONITOR_BUNDLE_MISMATCH')
     try:
-        version = subprocess.run([node, '--version'], capture_output=True, text=True, timeout=3, check=True).stdout
-        parts = tuple(int(v) for v in version.strip().lstrip('v').split('.'))
-        if parts < (22, 12, 0):
+        executable = Path(node).resolve()
+        info = executable.stat()
+        identity = (str(executable), info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        if not _node_probe(node, identity, pin['bundle_sha256']):
             raise ValueError()
     except (ValueError, OSError, subprocess.SubprocessError):
         raise KiokukoError('MONITOR_NODE_UNSUPPORTED') from None

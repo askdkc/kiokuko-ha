@@ -6,7 +6,7 @@ Kiokuko(記憶庫) is a memory plugin for Hermes Agent. It separates memories by
 
 During compaction and at the end of a conversation, Kiokuko stores only facts that can be rechecked against project files or configuration. The database is stored at `$HERMES_HOME/kiokuko/kiokuko.db`.
 
-Kiokuko supports Python 3.11–3.14 and Hermes 0.21, including the current PM source contract tested at `88c60858468d7adee27a752242c7c507fa4129d0`. Python 3.14 requires Hermes 0.21.4 or later in the 0.21 series; earlier hosts use an incompatible thread executor for memory synchronization.
+Kiokuko requires Python 3.11 or later for the standard-library `tomllib`, with no upper version cap. Hermes compatibility is checked through the required memory/plugin APIs and an in-memory synchronization probe. PyYAML has no upper version cap; safe configuration roundtrips and rejection of Python-object tags are checked by behavior. Release numbers and source fingerprints do not decide admission. The probe detects broken background executors, including the older executor on Python 3.14. See [verification](docs/verification.md) for tested hosts and limits.
 
 ## Install with current Hermes PM
 
@@ -357,7 +357,7 @@ See [curation details](docs/curation.md), [operational boundaries](docs/operatio
 
 ## Optional API monitoring and experience memory
 
-OrcaReplay records Hermes's OpenAI-compatible API requests and responses from the CLI and Gateway. With Node.js 22.12 or later installed, enable monitoring and check its status in the interactive Hermes CLI or a Gateway chat for the intended profile:
+OrcaReplay records Hermes's OpenAI-compatible API requests and responses from the CLI and Gateway. With a Node.js runtime that passes the bundled-writer protocol check installed, enable monitoring and check its status in the interactive Hermes CLI or a Gateway chat for the intended profile:
 
 ```text
 /kiokuko-monitor enable

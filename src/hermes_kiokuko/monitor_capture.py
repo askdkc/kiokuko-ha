@@ -62,9 +62,18 @@ def begin_turn(service, snap, raw):
         return
     try:
         from .monitor import get_manager
-        get_manager(service).begin(snap, payload({'text': raw}))
+        manager = get_manager(service)
+        capture = manager.begin(snap, payload({'text': raw}))
+        return (manager, capture) if capture is not None else None
     except Exception:
         runtime.record_status('MONITOR_CAPTURE_MISSING', service)
+
+
+def abort_turn(binding, code):
+    """Queue closure of this hook's capture; no config, DB or manager lookup."""
+    if binding is not None:
+        manager, capture = binding
+        manager.abort(capture.snapshot, expected=capture, code=code)
 
 
 def observe(kind, request, next_call, *, session_id='', turn_id='', task_id='',

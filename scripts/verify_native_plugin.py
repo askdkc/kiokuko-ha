@@ -1,6 +1,5 @@
-"""Build the native sdist through pinned current Hermes PM in a disposable home."""
+"""Build the native sdist through the selected Hermes PM in a disposable home."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -9,6 +8,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+
+from verification_support import verify_host
 
 ROOT = Path(__file__).resolve().parents[1]
 SMOKE = r'''
@@ -91,14 +92,19 @@ print('PASS: current PM native install; normal setup catalog/search/canonical pr
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('archive', type=Path)
+    parser.add_argument('archive', type=Path, nargs='?')
     parser.add_argument('--host', type=Path, required=True)
+    parser.add_argument('--fixture', help='Opt-in checksum identity for a historical regression fixture')
+    parser.add_argument('--check-host-only', action='store_true')
     parser.add_argument('--uv', type=Path, default=shutil.which('uv'))
     args = parser.parse_args()
     host = args.host.resolve()
-    pin = json.loads((ROOT / 'tests/hermes_e2e/pin.json').read_text())['fixtures']['current-88c6085']
-    for name, digest in pin['files'].items():
-        assert hashlib.sha256((host / name).read_bytes()).hexdigest() == digest, name
+    report = verify_host(host, args.fixture)
+    if args.check_host_only:
+        print(json.dumps(report))
+        return
+    if args.archive is None:
+        parser.error('archive is required unless --check-host-only is used')
     if not args.uv or not args.uv.is_file():
         parser.error('an installed uv executable is required')
     sys.path.insert(0, str(host))

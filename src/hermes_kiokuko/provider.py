@@ -19,7 +19,7 @@ class KiokukoMemoryProvider(MemoryProvider):
         return surface_is_compatible_and_selected()
 
     def unavailable_reason(self):
-        return "Requires supported Hermes 0.21, native MEMORY.md and USER.md disabled, and a valid Kiokuko schema. Run hermes kiokuko doctor."
+        return "Requires compatible Hermes memory/plugin APIs and working memory sync, native MEMORY.md and USER.md disabled, and a valid Kiokuko schema. Run hermes kiokuko doctor for failed checks."
 
     def initialize(self, session_id, **kwargs):
         self.shutdown()

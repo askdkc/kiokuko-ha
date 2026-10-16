@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, help="Use an already downloaded archive without network")
-    parser.add_argument("--fixture", choices=tuple(json.loads((ROOT / "tests/hermes_e2e/pin.json").read_text())["fixtures"]), default="0.21.0")
+    parser.add_argument("--fixture", required=True, choices=tuple(json.loads((ROOT / "tests/hermes_e2e/pin.json").read_text())["fixtures"]), help="Explicit historical fixture to reproduce; not a current-host compatibility gate")
     args = parser.parse_args()
     pin = json.loads((ROOT / "tests/hermes_e2e/pin.json").read_text())["fixtures"][args.fixture]
     destination = ROOT / (".cache/hermes" if args.fixture == "0.21.0" else ".cache/hermes-" + args.fixture)

@@ -79,6 +79,13 @@ def enable(home):
 def test_real_http_capture_to_next_turn(host,http_model,monkeypatch,stream,platform):
     home,_=host
     enable(home)
+    # A decimal suffix followed by ':' and a long authenticator looks like a
+    # Telegram credential to Hermes' real provider-egress redactor. Keep this
+    # previously random collision deterministic on both turns and platforms.
+    from itertools import count
+    from hermes_kiokuko import deliveries
+    delivery_ids=count()
+    monkeypatch.setattr(deliveries,'new_id',lambda prefix: f'{prefix}_{next(delivery_ids):024x}12345678')
     import requests
     monkeypatch.setattr(requests.sessions.Session,'request',lambda *a,**k: (_ for _ in ()).throw(RuntimeError('external probes disabled')))
     from hermes_kiokuko import experiences,runtime

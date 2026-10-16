@@ -4,7 +4,7 @@ OrcaReplayの記録処理を使い、Hermesの**middleware境界の要求・応�
 
 ## 有効化
 
-Node.js 22.12以降を別途用意し、対象profileのHermes対話CLIまたはチャットで実行します。
+Node.jsを別途用意し、対象profileのHermes対話CLIまたはチャットで実行します。同梱writerを実際に読み込み、traceを作らずprotocol handshakeを確認します。版数文字列では拒否せず、bundleのbuild targetは`node22`を維持しています。
 
 ```text
 /kiokuko-monitor enable
