@@ -22,7 +22,9 @@ def main():
         assert Path(hermes_kiokuko.__file__).is_relative_to(installed)
         from hermes_kiokuko.bundled_skills import skill_root
         assert skill_root().is_relative_to(installed)
-        assert len(list(skill_root().glob('*/SKILL.md'))) == 6
+        assert (skill_root() / 'kiokuko-imozuru/SKILL.md').is_file()
+        notice = (skill_root() / 'kiokuko-imozuru/references/NOTICE.md').read_text()
+        assert 'Copyright (c) 2026 MaryCache' in notice and 'THE SOFTWARE IS PROVIDED "AS IS"' in notice
         from importlib.metadata import entry_points
         for group, name in [('hermes_agent.plugins','kiokuko-tools'), ('hermes_agent.memory_providers','kiokuko')]:
             assert any(ep.name == name for ep in entry_points(group=group))
@@ -54,7 +56,7 @@ def main():
         assert diagnosis['ok'], diagnosis
         assert diagnosis['command_registration']['commands']['kiokuko-update']
         _reset_plugin_managers_for_tests()
-        print('PASS: wheel isolated install, provider directory/load, entrypoints, 6 read-only Skills, command registration and unchanged host discovery')
+        print('PASS: wheel isolated install, provider directory/load, entrypoints, bundled Skills including imozuru/license, command registration and unchanged host discovery')
 
 
 if __name__ == '__main__':

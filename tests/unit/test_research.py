@@ -41,7 +41,7 @@ def test_synthetic_cases_preserve_original_request(user_request, tmp_path):
     assert seen == [user_request, user_request] and user_request in result
 
 
-@pytest.mark.parametrize('text,expected', [('最新の料金を調べて',True),('出典付きで確認して',True),('仮に魔法がある世界なら',False),('この作品どう思う',False),('/another command',False),('違うだろ',False)])
+@pytest.mark.parametrize('text,expected', [('最新の料金を調べて',True),('出典付きで確認して',True),('原文を検索して',True),('Search for the original paper',True),('仮に魔法がある世界なら',False),('この作品どう思う',False),('/another command',False),('違うだろ',False)])
 def test_bounded_auto_triggers(text, expected):
     assert auto_request(text) is expected
 

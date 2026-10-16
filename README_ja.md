@@ -307,4 +307,4 @@ python -m hermes_kiokuko task-profiles status
 
 [設定・各モード・上限・削除](docs/task-profiles.md)
 
-[出典を検査する調査コマンドと診断](docs/research.md): `/kiokuko-research <request>` / `/kiokuko-research status`.
+[原文までたどる調査と診断](docs/research.md): 通常の人間のターンでの `web_search` と `/kiokuko-research <request>` が引用・著者・用語をたどり、原文の引用と位置を検査します。探索上限と未解決点を明示し、`/kiokuko-research status` で読み込まれた実行環境を確認できます。

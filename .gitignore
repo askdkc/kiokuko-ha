@@ -13,3 +13,5 @@ build/
 .release-venv312
 pip-publish.sh
 .kiokuko.json
+.kiokuko
+.AGENTS.md

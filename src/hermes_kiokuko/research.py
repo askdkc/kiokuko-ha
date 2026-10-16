@@ -4,7 +4,7 @@ import json
 import re
 import time
 from datetime import datetime, timezone
-from urllib.parse import urlsplit, quote as urlquote
+from urllib.parse import quote as urlquote
 
 from .config import read_yaml
 from .errors import KiokukoError
@@ -23,32 +23,15 @@ def auto_request(text):
         return False
     if re.search(r'仮に|創作|小説|もしも|意見|どう思う|hypothetical|fiction|opinion', text, re.I):
         return False
-    return bool(re.search(r'調べて|調査して|出典(?:を|付き)|一次資料|最新.*(?:確認|調査)|事実.*(?:確認|検証)|fact.check|research\b|verify.*(?:source|current)', text, re.I))
+    return bool(re.search(r'調べて|調査して|検索して|芋づる|出典(?:を|付き)|一次資料|最新.*(?:確認|調査)|事実.*(?:確認|検証)|fact.check|research\b|\bsearch\b|verify.*(?:source|current)', text, re.I))
 
 
-def collect(query):
-    from tools.web_tools import web_search_tool, web_extract_tool
-    found = json.loads(web_search_tool(query, limit=3))
-    if not found.get('success'):
-        raise KiokukoError('RESEARCH_SEARCH_UNAVAILABLE')
-    hits = found.get('data', {}).get('web', [])[:3]
-    urls = [h['url'] for h in hits if isinstance(h, dict) and isinstance(h.get('url'), str)
-            and urlsplit(h['url']).scheme in {'https', 'http'}]
-    if not urls:
-        raise KiokukoError('RESEARCH_NO_SOURCES')
+def extract_pages(urls):
+    from tools.web_tools import web_extract_tool
     async def extract():
-        return await asyncio.wait_for(web_extract_tool(urls, format='text', char_limit=12000), 15)
-    fetched = json.loads(asyncio.run(extract()))
-    sources = []
-    for row in fetched.get('results', []):
-        if row.get('url') not in urls or row.get('error') or not isinstance(row.get('content'), str) or not row['content'].strip():
-            continue
-        hit = next(h for h in hits if h.get('url') == row['url'])
-        sources.append({'id': f'S{len(sources)+1}', 'url': row['url'],
-                        'title': str(hit.get('title') or row['url'])[:200], 'content': row['content'][:4000]})
-    if not sources:
-        raise KiokukoError('RESEARCH_EXTRACT_UNAVAILABLE')
-    return sources
+        # Markdown retains relative/reference links that text-only extraction loses.
+        return await asyncio.wait_for(web_extract_tool(urls, format='markdown', char_limit=16000), 15)
+    return json.loads(asyncio.run(extract()))
 
 
 def synthesize(home, payload):
@@ -64,7 +47,9 @@ def synthesize(home, payload):
         api_mode=cfg.get('api_mode'), task='kiokuko-research')
     if resolved != model or not isinstance(client, (OpenAI, CodexAuxiliaryClient)):
         raise KiokukoError('RESEARCH_ROUTE_UNSUPPORTED')
-    kwargs = dict(model=model, messages=[{'role':'system','content':PROMPT},
+    from .research_trail import PLAN_PROMPT, TRACE_PROMPT, REVIEW_PROMPT
+    prompt = {'plan': PLAN_PROMPT, 'trace': TRACE_PROMPT, 'review_trail': REVIEW_PROMPT}.get(payload.get('stage'), PROMPT)
+    kwargs = dict(model=model, messages=[{'role':'system','content':prompt},
         {'role':'user','content':canonical(payload)}], max_tokens=2000)
     if isinstance(client, CodexAuxiliaryClient):
         from .responses import extract_response
@@ -107,7 +92,14 @@ def validate_answer(answer, sources, request):
     return '\n\n'.join(lines)
 
 
-def run(home, request, memories, *, collector=collect, model=synthesize, cancelled=None):
+def run(home, request, memories, *, collector=None, model=None, cancelled=None, interrupted=None):
+    if model is None:
+        model = synthesize
+    if collector is None:
+        from .research_trail import explore, render
+        # Memory is neither a search query nor source evidence. Research needs only
+        # the public request; scoped memory selection stays in the command receipt.
+        return render(explore(home, request, model=model, cancelled=cancelled, interrupted=interrupted))
     started = time.monotonic()
     def check_cancelled():
         if cancelled is not None and cancelled.is_set():

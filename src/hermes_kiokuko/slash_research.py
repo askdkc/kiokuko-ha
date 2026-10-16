@@ -97,10 +97,12 @@ class SlashResearch:
                 memory_count = len(memories)
                 from .model_job import ModelJob
                 from .research import run
+                from .research_trail import host_interrupt_check
                 import os
                 job = ModelJob(acquire_lock(directory / 'worker.lock', exclusive=True, timeout=0))
                 try:
-                    reply = job.call(lambda: run(home, request, memories, cancelled=cancelled), timeout=50)
+                    interrupted = host_interrupt_check()
+                    reply = job.call(lambda: run(home, request, memories, cancelled=cancelled, interrupted=interrupted), timeout=50)
                 finally:
                     if not job.detached:
                         os.close(job.fd)

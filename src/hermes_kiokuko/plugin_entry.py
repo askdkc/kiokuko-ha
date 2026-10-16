@@ -18,10 +18,16 @@ def register(ctx, *, managed=False):
                           check_fn=tool_availability_check(name),
                           description="Kiokuko scoped memory; model proposals require human approval")
     ctx.register_hook("pre_llm_call", pre_llm_call)
+    from .search_research import SearchResearch
+    search_research = SearchResearch(ctx)
+    ctx.register_hook("pre_llm_call", search_research.bind_turn)
     from .monitor_capture import llm_execution_middleware, capture_tool_middleware
     ctx.register_middleware("llm_execution", llm_execution_middleware)
     ctx.register_middleware("tool_execution", capture_tool_middleware)
     ctx.register_middleware("tool_execution", tool_execution_middleware)
+    # Keep observation outside the behavior-changing search adapter so monitor
+    # sees the final tool result through the same path as other tools.
+    ctx.register_middleware("tool_execution", search_research)
     ctx.register_cli_command("kiokuko", "Kiokuko memory management", setup_parser, cli_handler)
     from .curation import setup_parser as curation_parser
     ctx.register_cli_command("kioku-curation", "検証済みのプロジェクト記憶を選んでGlobalへ共有", curation_parser, cli_handler)

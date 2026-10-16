@@ -307,4 +307,4 @@ python -m hermes_kiokuko task-profiles status
 
 [Setup, modes, limits and deletion](docs/task-profiles.md)
 
-[Buffered research and diagnostics](docs/research.md): `/kiokuko-research <request>` / `/kiokuko-research status`.
+[Source-chasing research and diagnostics](docs/research.md): ordinary human `web_search` calls and `/kiokuko-research <request>` trace references to checked original excerpts, with bounded exploration and explicit unresolved questions. `/kiokuko-research status` reports the loaded runtime.
