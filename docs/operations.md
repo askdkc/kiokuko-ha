@@ -1,4 +1,4 @@
-現行HermesのPM環境では[READMEのnative導入手順](../README_ja.md#現行hermesのpmで導入する)を使います。この文書の直接pip更新は旧Hermes専用です。PM環境の更新は`hermes plugins update kiokuko-tools`で行います。
+現行HermesのPM環境では[READMEのnative導入手順](../README_ja.md#現行hermesのpmで導入する)を使います。この文書の直接pip更新は旧Hermes専用です。PM環境では同じprofileの `hermes plugins list` と plugins/ 配下の保存先を確認し、`hermes plugins update "$KIOKUKO_PLUGIN_KEY"` に実際の相対ディレクトリキーを渡します。manifestの表示名から固定キーを推測しません。
 
 # 運用と境界
 
@@ -16,9 +16,11 @@ Hermesの移行処理は`find_provider_dir()`でインストール済みかを�
 既存DBの削除や`memory.provider`の変更は必要ありません。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" - <<'PY'
 from importlib.metadata import version
 from plugins.memory import find_provider_dir, find_provider_entry_point
@@ -26,6 +28,7 @@ print("version:", version("hermes-kiokuko"))
 print("entrypoint:", find_provider_entry_point("kiokuko"))
 print("provider_directory:", find_provider_dir("kiokuko"))
 PY
+)
 ```
 
 entry pointがない場合は、そのPython環境にパッケージが登録されていません。
@@ -93,10 +96,13 @@ Hermesの実行に使用しているPythonで、Hermesのチェックアウト�
 バージョン文字列が一致していてもAPIが一致するとは限りません。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 未更新のpluginでは詳細な `host_contract` は出ません。修正版の配布物を同じPython環境へ
@@ -111,11 +117,14 @@ cd "$HOME/.hermes/hermes-agent" || exit
 稼働Gatewayと同じPythonとprofileを指定して確認します。次の例は`main`用です。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 "$HERMES_PY" -c 'from importlib.metadata import version; import hermes_cli; print("hermes-kiokuko:", version("hermes-kiokuko")); print("Hermes:", hermes_cli.__version__)'
 "$HERMES_PY" -m hermes_kiokuko doctor
 "$HERMES_PY" -m hermes_kiokuko status
+)
 ```
 
 `status`の`sync_skips_and_errors`と発生時刻を照合します。`doctor`の成功は設定・host契約・DB整合性の確認であり、稼働Gatewayでhookが実行された証明ではありません。また、端末で調べたインストール済みversionと、再起動前のGatewayにロード済みのversionが異なる場合があります。
@@ -133,10 +142,13 @@ export HERMES_HOME="$HOME/.hermes/profiles/main"
 修正版パッケージのインストール後、担当Gatewayを再起動して連続ターンを確認します。`main`の例です。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?対象Gatewayの起動Pythonを指定してください}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
 "$HERMES_PY" -m hermes_cli.main --profile main gateway restart
 "$HERMES_PY" -m hermes_kiokuko status
+)
 ```
 
 同じPhoton会話で通常メッセージを連続して送り、候補保存とstatusを確認します。エラーcountは累積なのでゼロに戻る必要はなく、`SESSION_IDENTITY_MISMATCH`のcount・時刻が増えないかを見ます。既存DBやsession bindingを削除・書き換える修復ではありません。既にHermes側でIDが渡される環境では、そのIDを従来どおり検証します。

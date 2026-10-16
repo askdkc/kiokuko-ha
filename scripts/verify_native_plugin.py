@@ -31,7 +31,14 @@ loaded = manager._plugins['kiokuko-tools']
 assert loaded.enabled and not loaded.error
 assert loaded.manifest.source == 'user', loaded.manifest
 assert set(loaded.tools_registered) == {'kiokuko_recall','kiokuko_propose','kiokuko_manage'}
-assert 'plugins update kiokuko-tools' in manager._plugin_commands['kiokuko-update']['handler'].execute(home, '')
+hint = manager._plugin_commands['kiokuko-update']['handler'].execute(home, '')
+assert 'plugins list' in hint
+directory = Path(loaded.manifest.path).resolve()
+if directory.is_relative_to(home / 'plugins'):
+    key = directory.relative_to(home / 'plugins').as_posix()
+    assert f'plugins update {key}' in hint
+else:
+    assert '保存先キー:' not in hint  # PM snapshots do not establish an update directory.
 from plugins.memory import find_provider_dir, load_memory_provider
 assert find_provider_dir('kiokuko') is not None
 provider = load_memory_provider('kiokuko')

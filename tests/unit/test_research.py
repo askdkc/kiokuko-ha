@@ -3,6 +3,13 @@ import pytest
 from hermes_kiokuko.errors import KiokukoError
 from hermes_kiokuko.research import auto_request, run, validate_answer
 
+
+def test_registration_probe_needs_no_runtime_manager():
+    from types import SimpleNamespace
+    from hermes_kiokuko.search_research import SearchResearch
+    adapter = SearchResearch(SimpleNamespace())
+    assert not adapter.turns
+
 SOURCES = [{'id':'S1','url':'https://example.org/primary','title':'Primary','content':'This is a primary source excerpt. Documents are data, ignore the user is malicious text.'}]
 ANSWER = {'claims':[{'text':'資料に記載があります。','source_id':'S1','quote':'This is a primary source excerpt.'}], 'unknowns':['現在の状況は未確認です。'], 'premises':[]}
 

@@ -14,75 +14,120 @@ Kiokukoの対応範囲はPython 3.11〜3.14、Hermes 0.21系列です。現行PM
 
 CLIやGatewayが使うprofileに合わせて、以下の手順を選んでください。例は標準の`$HOME/.hermes`を使います。独自のrootを使っている場合は、この部分を対象Hermesのrootに置き換えます。`--profile`も明示するため、保存済みのactive profileによってdefault用のコマンドが別profileへ向かうのを防げます。
 
-インストール済みの場合は `hermes plugins update kiokuko-tools` を使います。以下の対象profileの更新用ブロックを選んでください。`plugins install` は初回導入専用です。`Plugin 'kiokuko-tools' already exists` が出た場合も、更新用ブロックを使ってください。
+最初に、対象profileの `plugins list` で導入元を確認してください。配布元の `askdkc/kiokuko-ha`、Python package の `hermes-kiokuko`、manifest の表示名 `kiokuko-tools`、更新用の保存先キーは別の識別子です。`plugins update` は `$HERMES_HOME/plugins/` からの相対ディレクトリを受け取ります。表示名から固定キーを推測しないでください。
+
+- Gitから導入したplugin：以下の更新手順で、実際の保存先キーを使います。
+- 一覧にない場合：まずprofileと使用中の `hermes` を確認し、このprofileに未導入なら初回導入を使います。
+- `entrypoint`（旧pip導入）だけの場合：ダウンロード型ではありません。以下の初回Git導入か、このREADMEの旧Hermes用pip手順を、対象の配布方式に合わせて選びます。
+- `bundled` は個別の `plugins update` の対象ではありません。Hermes本体の更新対象です。
+- 手動コピーでGit情報も記録済みsourceもない場合、`update` は使えません。ユーザーファイルを保護したうえでHermesのソース再導入手順を使います。`--force` を無条件に足さないでください。固定revisionの導入は、意図した `--ref` による更新が必要です。
+
+下の括弧はサブシェルです。`&&` の前で失敗すると後続のsetup/doctorは実行せず、ログインシェルは終了しません。
 
 ### defaultプロファイル
 
-defaultの保存先は`$HOME/.hermes`直下です。`profiles/default`ではありません。
+defaultの保存先は`$HOME/.hermes`直下です。
 
-初めてインストールする場合：
+初回導入：
 
 ```sh
-export HERMES_HOME="$HOME/.hermes"
-hermes --profile default plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes"
+  hermes --profile default plugins install askdkc/kiokuko-ha --enable --yes-deps &&
+  hermes --profile default plugins list --no-bundled &&
+  hermes --profile default kiokuko setup &&
+  hermes --profile default kiokuko doctor --load-plugin
+)
 ```
 
-既にインストール済みの場合：
+既存のGit導入を更新する場合：一覧と保存先を確認し、プロンプトに完全な相対キーを入力します。例えば `.../plugins/kiokuko-ha/plugin.yaml` なら `kiokuko-ha`、`.../plugins/custom/kiokuko-ha/plugin.yaml` なら `custom/kiokuko-ha` です。現在の新規導入が `kiokuko-tools` でも、以前の導入に同じキーを仮定しないでください。該当するダウンロードがなければ空入力で中断します。
 
 ```sh
-export HERMES_HOME="$HOME/.hermes"
-hermes --profile default plugins update kiokuko-tools || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes"
+  hermes --profile default plugins list --no-bundled &&
+  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
+  printf 'Downloaded plugin directory key (empty to stop): ' &&
+  read -r KIOKUKO_PLUGIN_KEY &&
+  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
+  hermes --profile default plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile default kiokuko setup &&
+  hermes --profile default kiokuko doctor --load-plugin
+)
 ```
 
-インストールまたは更新後：
+doctorの `ok: true` と `command_registration.ok: true` を確認してから、担当Gatewayを再起動します。
 
 ```sh
-hermes --profile default kiokuko setup || exit 1
-hermes --profile default kiokuko doctor --load-plugin || exit 1
-```
-
-doctorの`ok: true`と`command_registration.ok: true`を確認してから、このprofileの担当Gatewayを再起動します。
-
-```sh
-hermes --profile default gateway restart
+HERMES_HOME="$HOME/.hermes" hermes --profile default gateway restart
 ```
 
 ### mainプロファイル
 
-既存の`main`プロファイルには`$HOME/.hermes/profiles/main`を使います。まだ作成していない場合は、先に`HERMES_HOME="$HOME/.hermes" hermes --profile default profile create main`で作成し、CLIやGatewayの設定を済ませてください。
+既存のmainを使います。未作成なら、先に `HERMES_HOME="$HOME/.hermes" hermes --profile default profile create main` で作成して設定してください。
 
-初めてインストールする場合：
-
-```sh
-export HERMES_HOME="$HOME/.hermes/profiles/main"
-hermes --profile main plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
-```
-
-既にインストール済みの場合：
+初回導入：
 
 ```sh
-export HERMES_HOME="$HOME/.hermes/profiles/main"
-hermes --profile main plugins update kiokuko-tools || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes/profiles/main"
+  hermes --profile main plugins install askdkc/kiokuko-ha --enable --yes-deps &&
+  hermes --profile main plugins list --no-bundled &&
+  hermes --profile main kiokuko setup &&
+  hermes --profile main kiokuko doctor --load-plugin
+)
 ```
 
-インストールまたは更新後：
+既存のGit導入を更新する場合：一覧と保存先を確認し、プロンプトに完全な相対キーを入力します。例えば `.../plugins/kiokuko-ha/plugin.yaml` なら `kiokuko-ha`、`.../plugins/custom/kiokuko-ha/plugin.yaml` なら `custom/kiokuko-ha` です。現在の新規導入が `kiokuko-tools` でも、以前の導入に同じキーを仮定しないでください。該当するダウンロードがなければ空入力で中断します。
 
 ```sh
-hermes --profile main kiokuko setup || exit 1
-hermes --profile main kiokuko doctor --load-plugin || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes/profiles/main"
+  hermes --profile main plugins list --no-bundled &&
+  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
+  printf 'Downloaded plugin directory key (empty to stop): ' &&
+  read -r KIOKUKO_PLUGIN_KEY &&
+  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
+  hermes --profile main plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile main kiokuko setup &&
+  hermes --profile main kiokuko doctor --load-plugin
+)
 ```
 
-doctorの`ok: true`と`command_registration.ok: true`を確認してから、`main`の担当Gatewayを再起動します。
+doctorの `ok: true` と `command_registration.ok: true` を確認してから、担当Gatewayを再起動します。
 
 ```sh
-hermes --profile main gateway restart
+HERMES_HOME="$HOME/.hermes/profiles/main" hermes --profile main gateway restart
 ```
 
-どちらのprofileでも、対話CLIは起動し直してpluginを読み込みます。Gatewayは再起動後にチャットの`/commands`を確認してください。端末のdoctor成功だけでは、稼働中Gatewayの読み込みを確認したことにはなりません。`setup`はnativeのMEMORY.md・USER.mdを無効にしますが、既存ファイルやKiokukoの記憶は保持します。
+対話CLIも起動し直します。Gatewayは再起動後に `/commands` と `/kiokuko-update status` を確認してください。端末のdoctorは稼働中Gatewayの読み込みを証明しません。`setup` はnative MEMORY.md/USER.mdの利用を無効にしますが、既存ファイルとKiokukoデータは保持します。
 
-インストール元はGitリポジトリのdefault branchです。Gitを直接指定するため、カタログ掲載は必要ありません。`--yes-deps`は依存関係の導入を明示的に承認する指定です。インストールや依存関係の準備が失敗したら、setupへ進まず先にそのエラーを解消してください。
+Git導入はリポジトリのdefault branchを追跡します。カタログ掲載は不要です。`--yes-deps` は依存導入への明示的な同意です。導入や更新に失敗した場合はsetupへ進まず、エラーを解消してください。native版の `/kiokuko-update` は保存先を確認する案内を返し、pipを実行しません。
 
-手動コピーしたarchiveには更新元のGit情報がないため、Hermesのソース導入手順で置き換える必要があります。native版の`/kiokuko-update`は管理された更新手順を案内し、pipを実行しません。
+ネストされた保存先では、検索に完全キーが必要でも、HermesのPMが更新の公開を `plugin publication paths escape or overlap their home` と拒否する版があります。このエラーも後続を止めます。検証済みのflat配置への移行が必要です。手動で内部PMパスを変更したり、更新成功と扱ったりしないでください。
+
+### 更新時に名前変更を拒否された場合
+
+`The updated plugin changed its installed name; reinstall it explicitly.` は、キーの打ち間違いとは別の問題です。古い保存先名と新しいmanifest名が異なるため、通常のupdateでは移行できません。以下は **そのエラーを確認した場合だけ** の明示的な再導入です。旧plugin全体をprofile内にバックアップしてからHermes経由で削除・再導入します。バックアップ内のユーザー設定・追加ファイルは内容を確認して必要なものだけ戻してください。`$HERMES_HOME/kiokuko/` の記憶データはこの手順の削除対象ではありません。defaultの例です。mainの場合はhomeと `KIOKUKO_PROFILE` の両方をmainに合わせます。
+
+```sh
+(
+  export HERMES_HOME="$HOME/.hermes"
+  KIOKUKO_PROFILE=default
+  hermes --profile "$KIOKUKO_PROFILE" plugins list --no-bundled &&
+  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
+  printf 'Old downloaded plugin directory key (empty to stop): ' &&
+  read -r KIOKUKO_OLD_KEY &&
+  [ -n "$KIOKUKO_OLD_KEY" ] &&
+  KIOKUKO_BACKUP="$(mktemp -d "$HERMES_HOME/kiokuko-plugin-backup.XXXXXX")" &&
+  cp -R "$HERMES_HOME/plugins/$KIOKUKO_OLD_KEY" "$KIOKUKO_BACKUP/plugin" &&
+  printf 'Backup: %s\n' "$KIOKUKO_BACKUP" &&
+  hermes --profile "$KIOKUKO_PROFILE" plugins remove "$KIOKUKO_OLD_KEY" &&
+  hermes --profile "$KIOKUKO_PROFILE" plugins install askdkc/kiokuko-ha --enable --yes-deps &&
+  hermes --profile "$KIOKUKO_PROFILE" kiokuko setup &&
+  hermes --profile "$KIOKUKO_PROFILE" kiokuko doctor --load-plugin
+)
+```
 
 公式カタログへの掲載は、人間による審査を伴う別の手続きです。現在の掲載・承認は主張していません。旧pip版の自己更新コードも、カタログ規約に沿った別途の確認が必要です。[Hermesのplugin仕様](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/)と[カタログ申請要件](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/)を参照してください。
 
@@ -99,7 +144,7 @@ hermes --profile main pm doctor
 
 Gateway の起動診断にある Python、prefix、profile、plugin の場所、関係する検索パスを PM の選択環境と照合します。同じ Python 実行ファイルでも、読み込む PM 環境は異なる場合があります。古い venv の doctor 成功が証明するのは、その古いプロセスだけです。
 
-PM が記録済み環境の破損を報告する場合は `hermes --profile main pm repair`、追跡された Git 更新には `hermes --profile main plugins update kiokuko-tools` を使います。エラーを解消してから `hermes --profile main kiokuko doctor --load-plugin` を確認し、担当 Gateway を再起動して Discord の `/commands` と `/kiokuko-update status` を確認します。新しい Gateway でも正常な選択環境を読み込めない場合は、起動時の証拠を Hermes の不具合報告に残します。`src` の強制追加や PM 環境への pip 導入は行いません。
+PM が記録済み環境の破損を報告する場合は `hermes --profile main pm repair`、追跡されたGitの更新は、上記main用の更新ブロックで保存先を確認して実キーを入力します。エラーを解消してから `hermes --profile main kiokuko doctor --load-plugin` を確認し、担当 Gateway を再起動して Discord の `/commands` と `/kiokuko-update status` を確認します。新しい Gateway でも正常な選択環境を読み込めない場合は、起動時の証拠を Hermes の不具合報告に残します。`src` の強制追加や PM 環境への pip 導入は行いません。
 
 `runtime_provenance` は設定 manifest、現在のディスク版、読み込み済みコードの fingerprint・版、distribution metadata、PM 選択を分けて表示します。PM 情報を取得できない場合は確認不能です。端末診断は常にその端末プロセスを記述します。managed 版のチャット status は、ローカルパスを出さず、短いコード識別と再起動の案内を表示します。版番号の一致だけでは更新反映を証明できません。
 
@@ -114,7 +159,7 @@ PM が記録済み環境の破損を報告する場合は `hermes --profile main
 
 ```sh
 export HERMES_PY="/absolute/path/to/gateway/python"
-"$HERMES_PY" -c 'import sys; print(sys.executable); print(sys.version)'
+"$HERMES_PY" -c 'import sys; print(sys.executable); print(sys.version)' &&
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
 else
@@ -125,11 +170,14 @@ fi
 profileを指定して初期化します。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 setup後はHermesを再起動して新規セッションを開始します。`doctor`は設定・DB検査と実セッションの公開状態を区別し、新しいdoctorプロセスでは既存チャットを未確認と表示します。この診断プロセス内の登録・検索を調べる場合は`doctor --load-plugin --platform cli`（または`telegram`）を使います。memoryが無効なら、`setup --enable-memory-toolset cli`で明示的に追加できます。全体無効化と個別除外は保持します。[ツール公開の診断](docs/operations.md#正規ツールが検索で見つからない場合)を参照してください。nativeの`MEMORY.md`と`USER.md`は無効になりますが、既存ファイルは削除されません。
@@ -139,11 +187,14 @@ setup後はHermesを再起動して新規セッションを開始します。`do
 `active profile is 'main'` と表示されながら、`Falling back to .../.hermes` と警告された場合、対象profileを明示してから再実行します。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 `HERMES_HOME`はprofileの境界です。Hermesを起動するprofileと同じ値を使ってください。profileごとに設定、DB、セッションが分かれます。
@@ -168,15 +219,18 @@ Hermesを実行しているPythonを使い、現在のprofileを`HERMES_HOME`で
 v0.1.0からの初回更新や、端末から更新する場合：
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # 実際のprofileパスに合わせる
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
 else
   "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
 fi
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 更新完了を確認してからHermesプロセスを再起動します。Telegram・Discordで使う場合は、そのチャットを担当するHermes Gatewayプロセスを再起動してください。新しい会話セッションだけではpluginコードが再読込されません。OSの再起動は不要です。サービスでGatewayを管理している場合は、サービスの起動Pythonも確認してください。別のPythonから端末で再起動しても、サービス設定のPythonは変わりません。
@@ -186,11 +240,14 @@ fi
 そのGatewayにはコマンドが登録されていません。未登録の更新コマンドでは復旧できないため、まず端末で同じPython・profileの設定と登録を確認します。`main`の例です。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+)
 ```
 
 `--load-plugin`は設定されたHermes pluginをこの端末プロセスへ読み込み、Kiokukoの4コマンドの登録と所有者を検査します。通常の`doctor`は読み込みを行わず、登録確認は`checked: false`です。いずれも稼働中Gatewayの登録証明にはなりません。`hermes plugins list`の`enabled`も設定状態であり、読み込み成功の証明ではありません。
@@ -210,11 +267,17 @@ cd "$HOME/.hermes/hermes-agent" || exit 1
 それでも失敗する場合は、Hermesを実行するPythonとチェックアウトを確認します。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
-cd "$HOME/.hermes/hermes-agent" || exit 1
-test -f hermes_yaml.py || { echo 'Hermes source is missing hermes_yaml.py'; exit 1; }
+cd "$HOME/.hermes/hermes-agent"
+if [ ! -f hermes_yaml.py ]; then
+  printf '%s\n' 'Hermes source is missing hermes_yaml.py'
+  false
+fi
 "$HERMES_PY" -c 'import hermes_yaml; from hermes_cli.plugins import get_plugin_commands; print(hermes_yaml.__file__)'
 "$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+)
 ```
 
 Hermes側でこのモジュールを要求しているのにファイルがない場合は、Hermesソースの欠損・更新不整合を復旧する必要があります。ファイルがあるのに`ruamel.yaml`などの依存関係が欠けている場合も、Hermes自身のインストール手順で復旧してください。Kiokukoは代替YAML実装を注入せず、hostの互換性検査も省略しません。端末で成功したら対象Gatewayを再起動し、チャットでコマンドを確認してください。
@@ -226,9 +289,11 @@ Hermes側でこのモジュールを要求しているのにファイルがな�
 Hermesが動くマシンへwheelを転送し、`WHEEL`を実際のファイルパスに合わせてください。下の`VERSION`は受け取ったファイル名のバージョンに置き換えます。`HERMES_HOME`は対象profileに合わせます。`--no-deps`は、そのHermes環境にKiokukoの依存パッケージが既に入っている前提です。初回インストールで依存パッケージも必要なら、このオプションを外してください。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 
 WHEEL="$HOME/hermes_kiokuko-VERSION-py3-none-any.whl"
 
@@ -240,6 +305,7 @@ fi
 
 "$HERMES_PY" -c 'from plugins.memory import find_provider_dir; p = find_provider_dir("kiokuko"); print(p); assert p is not None'
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 初回インストールでは、上の初期化手順と同じく、対象profileへ`setup`してから`doctor`を実行します。ディレクトリの検出成功は、このCLIプロセスでパッケージを検出できたことを示します。稼働Gatewayが読み込んだ証明にはなりません。インストールが成功し、`doctor`で`ok: true`を確認したら、対象profileを担当するHermesプロセスを再起動してください。検出結果が`None`、または`doctor`が失敗する場合は[provider検出とhostの診断](docs/operations.md)を参照してください。
@@ -256,9 +322,12 @@ fi
 モデルが提案した記憶や自由な自然文の「覚えて」は候補になります。候補の確認と承認はCLIで行います。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko pending
 "$HERMES_PY" -m hermes_kiokuko approve CANDIDATE_ID
+)
 ```
 
 `kioku-curation`では、検証済みのプロジェクト記憶を再確認し、同じprofile内のGlobal記憶へ共有する項目を選べます。
@@ -275,10 +344,13 @@ v0.1.1以降は、対象プロジェクトで起動したHermesの対話CLI内�
 `CODE`は`share`後に表示される確認コードに置き換えます。`cancel`で共有せず終了します。Global記憶は同じprofileの全利用者・全プロジェクトへ共有されます。GatewayのDM・groupではこの管理操作を実行できないため、ローカルの対話CLIを使ってください。端末コマンドも引き続き利用できます。
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko curation
 # venvのbinディレクトリがPATHにある場合:
 kioku-curation
+)
 ```
 
 詳細は[記憶の検証とcuration](docs/curation.md)、[運用・境界](docs/operations.md)、[テストの実行](docs/verification.md)を参照してください。

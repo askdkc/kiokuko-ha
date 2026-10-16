@@ -41,7 +41,19 @@ class ManagedSlashUpdate:
         except ImportError:
             profile = home.name if home.parent.name == 'profiles' else None
         selector = f' --profile {shlex.quote(profile)}' if profile else ' --profile default'
-        command = f'hermes{selector} plugins update kiokuko-tools'
+        base = f'hermes{selector}'
+        manifest = getattr(self.ctx, 'manifest', None)
+        key = None
+        if getattr(manifest, 'source', None) == 'user' and getattr(manifest, 'path', None):
+            try:
+                directory = Path(manifest.path).resolve()
+                relative = directory.relative_to((home / 'plugins').resolve())
+                if directory.is_dir() and relative.parts:
+                    key = relative.as_posix()
+            except (OSError, ValueError, RuntimeError):
+                pass
+        instruction = (f"保存先キー: {key}\n確認後に `{base} plugins update {shlex.quote(key)}` を実行してください。\n"
+                       if key else "一覧の表示名と保存先が異なる場合があります。対象profileの plugins/ 配下の保存先キーを確認し、その完全キーで plugins update を実行してください。\n")
         profile = profile or 'custom（端末で対象HERMES_HOMEを明示）'
         info = runtime_provenance(getattr(self.ctx, 'manifest', None))
         configured = info['configured_plugin']
@@ -54,7 +66,8 @@ class ManagedSlashUpdate:
                   f"設定版: {configured['version'] or '確認不能'} / ディスク版: {configured.get('disk_version') or '確認不能'}\n"
                   f"コード識別: {str(info['loaded']['fingerprint'] or 'unknown')[:12]}\n再起動: {restart}\n") if raw_args.strip() == 'status' else ''
         return ("このKiokukoはHermesのプラグイン管理で導入されています。\n" + status +
-                f"対象profile: {profile}\n端末で `{command}` を実行し、担当Gatewayを再起動してください。\n"
+                f"対象profile: {profile}\n端末で `{base} plugins list --no-bundled` を確認してください。\n" + instruction +
+                "Git由来のダウンロードだけが更新対象です。更新・doctorの成功を確認してから担当Gatewayを再起動してください。\n"
                 "管理環境を直接pipで更新する処理は実行しません。")
 
 

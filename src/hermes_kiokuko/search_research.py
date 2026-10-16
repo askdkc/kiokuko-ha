@@ -14,7 +14,10 @@ from .models import digest
 
 class SearchResearch:
     def __init__(self, ctx):
-        self.home = Path(ctx._manager.home_path).resolve()
+        # Hermes' admission probe records registrations without a runtime
+        # manager. It never executes bound turns; do not consult a live profile.
+        manager = getattr(ctx, '_manager', None)
+        self.home = Path(manager.home_path).resolve() if manager is not None else None
         self.turns = OrderedDict()
         self.guard = threading.Lock()
 

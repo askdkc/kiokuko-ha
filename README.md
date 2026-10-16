@@ -14,75 +14,120 @@ Current Hermes manages plugin code and Python dependencies together. Install dir
 
 Choose the procedure for the profile serving your CLI or Gateway. These examples use the standard `$HOME/.hermes` root. For a custom root, replace that prefix with the root used by your Hermes installation. The explicit `--profile` also prevents a saved active profile from redirecting the default-profile commands.
 
-If Kiokuko is already installed, use `hermes plugins update kiokuko-tools`. Choose the update block below for your profile; `plugins install` is only for a first installation. If you see `Plugin 'kiokuko-tools' already exists`, use the update block.
+First inspect `plugins list` in the profile you intend to update. The repository source `askdkc/kiokuko-ha`, Python distribution `hermes-kiokuko`, manifest display name `kiokuko-tools`, and update key are distinct identifiers. `plugins update` takes a directory relative to `$HERMES_HOME/plugins/`; never infer a fixed key from the display name.
+
+- Git-installed plugin: use its actual download directory key in the update block below.
+- No matching installation: check the profile and `hermes` launcher first; use first installation only if it is absent from this profile.
+- `entrypoint` only (legacy pip installation): this is not a downloaded plugin. Choose first Git installation below or the legacy Hermes pip procedure later in this README, according to the serving installation.
+- `bundled`: individual `plugins update` is unavailable; update Hermes itself.
+- Manually copied tree without Git or a recorded source: `update` cannot pull it. Preserve user files and use Hermes' source reinstall procedure; do not add `--force` unconditionally. Pinned installations require an intentional `--ref` change.
+
+Parentheses below run a subshell. A failed command stops the `&&` chain before setup/doctor and leaves your login shell running.
 
 ### Default profile
 
-The default profile lives directly in `$HOME/.hermes`, not in `profiles/default`:
+The default home is `$HOME/.hermes`, not `profiles/default`.
 
-For a first installation:
+First installation:
 
 ```sh
-export HERMES_HOME="$HOME/.hermes"
-hermes --profile default plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes"
+  hermes --profile default plugins install askdkc/kiokuko-ha --enable --yes-deps &&
+  hermes --profile default plugins list --no-bundled &&
+  hermes --profile default kiokuko setup &&
+  hermes --profile default kiokuko doctor --load-plugin
+)
 ```
 
-If already installed:
+Update an existing Git installation: inspect the listing and paths, then enter the full relative directory key at the prompt. For example, `.../plugins/kiokuko-ha/plugin.yaml` means `kiokuko-ha`; `.../plugins/custom/kiokuko-ha/plugin.yaml` means `custom/kiokuko-ha`. A new installation may use `kiokuko-tools`; older installations need not. Submit an empty key to stop if no matching download exists.
 
 ```sh
-export HERMES_HOME="$HOME/.hermes"
-hermes --profile default plugins update kiokuko-tools || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes"
+  hermes --profile default plugins list --no-bundled &&
+  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
+  printf 'Downloaded plugin directory key (empty to stop): ' &&
+  read -r KIOKUKO_PLUGIN_KEY &&
+  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
+  hermes --profile default plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile default kiokuko setup &&
+  hermes --profile default kiokuko doctor --load-plugin
+)
 ```
 
-After installation or update:
+After doctor reports `ok: true` and `command_registration.ok: true`, restart the serving Gateway:
 
 ```sh
-hermes --profile default kiokuko setup || exit 1
-hermes --profile default kiokuko doctor --load-plugin || exit 1
-```
-
-After doctor reports `ok: true` and `command_registration.ok: true`, restart the Gateway serving this profile:
-
-```sh
-hermes --profile default gateway restart
+HERMES_HOME="$HOME/.hermes" hermes --profile default gateway restart
 ```
 
 ### Named profile: main
 
-For an existing profile named `main`, use `$HOME/.hermes/profiles/main`. If it does not exist yet, create it first with `HERMES_HOME="$HOME/.hermes" hermes --profile default profile create main` and configure it for your CLI or Gateway.
+Use an existing main profile. If absent, first create it with `HERMES_HOME="$HOME/.hermes" hermes --profile default profile create main` and configure it.
 
-For a first installation:
-
-```sh
-export HERMES_HOME="$HOME/.hermes/profiles/main"
-hermes --profile main plugins install askdkc/kiokuko-ha --enable --yes-deps || exit 1
-```
-
-If already installed:
+First installation:
 
 ```sh
-export HERMES_HOME="$HOME/.hermes/profiles/main"
-hermes --profile main plugins update kiokuko-tools || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes/profiles/main"
+  hermes --profile main plugins install askdkc/kiokuko-ha --enable --yes-deps &&
+  hermes --profile main plugins list --no-bundled &&
+  hermes --profile main kiokuko setup &&
+  hermes --profile main kiokuko doctor --load-plugin
+)
 ```
 
-After installation or update:
+Update an existing Git installation: inspect the listing and paths, then enter the full relative directory key at the prompt. For example, `.../plugins/kiokuko-ha/plugin.yaml` means `kiokuko-ha`; `.../plugins/custom/kiokuko-ha/plugin.yaml` means `custom/kiokuko-ha`. A new installation may use `kiokuko-tools`; older installations need not. Submit an empty key to stop if no matching download exists.
 
 ```sh
-hermes --profile main kiokuko setup || exit 1
-hermes --profile main kiokuko doctor --load-plugin || exit 1
+(
+  export HERMES_HOME="$HOME/.hermes/profiles/main"
+  hermes --profile main plugins list --no-bundled &&
+  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
+  printf 'Downloaded plugin directory key (empty to stop): ' &&
+  read -r KIOKUKO_PLUGIN_KEY &&
+  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
+  hermes --profile main plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile main kiokuko setup &&
+  hermes --profile main kiokuko doctor --load-plugin
+)
 ```
 
-After doctor reports `ok: true` and `command_registration.ok: true`, restart the Gateway serving `main`:
+After doctor reports `ok: true` and `command_registration.ok: true`, restart the serving Gateway:
 
 ```sh
-hermes --profile main gateway restart
+HERMES_HOME="$HOME/.hermes/profiles/main" hermes --profile main gateway restart
 ```
 
-For either profile, restart an interactive CLI to load the plugin; for a Gateway, check `/commands` in its chat after the restart. Terminal doctor does not prove that the running Gateway loaded the plugin. `setup` disables native MEMORY.md/USER.md use and preserves their files and existing Kiokuko data.
+Restart an interactive CLI too. After a Gateway restart verify `/commands` and `/kiokuko-update status`; terminal doctor does not prove what a running Gateway loaded. `setup` disables native MEMORY.md/USER.md use while preserving their files and existing Kiokuko data.
 
-The install command follows the Git repository's default branch. This is a custom Git source; catalog listing is not required. `--yes-deps` explicitly approves dependency installation. If installation or dependency preparation fails, resolve that error before running setup.
+Git installation follows the repository default branch; catalog listing is not required. `--yes-deps` explicitly consents to dependency installation. Resolve install/update failures before setup. Native `/kiokuko-update` provides download-key guidance and never runs pip.
 
-A manually copied archive has no tracked Git source; it needs replacement through Hermes's source-install procedure. `/kiokuko-update` in native mode gives the managed update instructions and never invokes pip.
+For nested installations, a full key is necessary for lookup, but some Hermes PM versions refuse publication with `plugin publication paths escape or overlap their home`. Stop on that error; migration to a supported flat installation is needed. Do not edit PM internals or treat the refused update as successful.
+
+### If update refuses a changed installed name
+
+`The updated plugin changed its installed name; reinstall it explicitly.` is different from an incorrect key. The old directory name differs from the new manifest name, so normal update cannot migrate it. Use the following explicit reinstall **only after observing that error**. It backs up the whole old plugin inside the profile before removing and reinstalling through Hermes. Review user settings/additional files in the backup and restore only the needed ones. Memory data under `$HERMES_HOME/kiokuko/` is outside the removed plugin directory. This example targets default; for main change both the home and `KIOKUKO_PROFILE`.
+
+```sh
+(
+  export HERMES_HOME="$HOME/.hermes"
+  KIOKUKO_PROFILE=default
+  hermes --profile "$KIOKUKO_PROFILE" plugins list --no-bundled &&
+  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
+  printf 'Old downloaded plugin directory key (empty to stop): ' &&
+  read -r KIOKUKO_OLD_KEY &&
+  [ -n "$KIOKUKO_OLD_KEY" ] &&
+  KIOKUKO_BACKUP="$(mktemp -d "$HERMES_HOME/kiokuko-plugin-backup.XXXXXX")" &&
+  cp -R "$HERMES_HOME/plugins/$KIOKUKO_OLD_KEY" "$KIOKUKO_BACKUP/plugin" &&
+  printf 'Backup: %s\n' "$KIOKUKO_BACKUP" &&
+  hermes --profile "$KIOKUKO_PROFILE" plugins remove "$KIOKUKO_OLD_KEY" &&
+  hermes --profile "$KIOKUKO_PROFILE" plugins install askdkc/kiokuko-ha --enable --yes-deps &&
+  hermes --profile "$KIOKUKO_PROFILE" kiokuko setup &&
+  hermes --profile "$KIOKUKO_PROFILE" kiokuko doctor --load-plugin
+)
+```
 
 The official catalog is a separate human-reviewed submission. This repository is not claimed to be catalog-listed or catalog-approved; legacy pip self-update code also requires a separate catalog-policy review. See [Hermes plugin documentation](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/) and [catalog submission requirements](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission/).
 
@@ -99,7 +144,7 @@ hermes --profile main pm doctor
 
 Compare the Gateway startup diagnostic's Python, prefix, profile, plugin path and relevant search paths with the PM selection. The same Python executable can load different PM environments. A successful doctor in an old venv proves only that old process.
 
-If PM reports a damaged recorded environment, use `hermes --profile main pm repair`. For a tracked Git update, use `hermes --profile main plugins update kiokuko-tools`. Check errors before continuing. Then run `hermes --profile main kiokuko doctor --load-plugin`, restart the serving Gateway, and verify `/commands` and `/kiokuko-update status` in Discord. If a fresh Gateway still cannot activate a healthy selected environment, retain the startup evidence for a Hermes issue; do not inject `src` or pip-install into PM generations.
+If PM reports a damaged recorded environment, use `hermes --profile main pm repair`. For a tracked Git update, use the main-profile update block above to inspect the download directory and enter its actual key. Check errors before continuing. Then run `hermes --profile main kiokuko doctor --load-plugin`, restart the serving Gateway, and verify `/commands` and `/kiokuko-update status` in Discord. If a fresh Gateway still cannot activate a healthy selected environment, retain the startup evidence for a Hermes issue; do not inject `src` or pip-install into PM generations.
 
 `runtime_provenance` separates the configured manifest, current disk version, loaded code fingerprint/version, distribution metadata and PM selection. Unavailable PM information is unknown. Terminal diagnostics always describe their own process. Managed chat status displays a short loaded fingerprint and restart advice without local paths. Equal version numbers alone do not prove that an update was loaded.
 
@@ -114,7 +159,7 @@ Replace the path below with that interpreter. Confirm its path and version befor
 
 ```sh
 export HERMES_PY="/absolute/path/to/gateway/python"
-"$HERMES_PY" -c 'import sys; print(sys.executable); print(sys.version)'
+"$HERMES_PY" -c 'import sys; print(sys.executable); print(sys.version)' &&
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
 else
@@ -125,11 +170,14 @@ fi
 Initialize the profile:
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 Restart Hermes after setup and start a new session. `doctor` separates configuration and database checks from live session visibility; a fresh doctor process reports the existing chat as unconfirmed. To inspect registration and search in the doctor process, use `doctor --load-plugin --platform cli` (or `telegram`). If memory is disabled, explicitly opt in with `setup --enable-memory-toolset cli`; global disables and individual exclusions are preserved. See [tool publication diagnostics](docs/operations.md#正規ツールが検索で見つからない場合). Native `MEMORY.md` and `USER.md` are disabled, but existing files are preserved.
@@ -139,11 +187,14 @@ Restart Hermes after setup and start a new session. `doctor` separates configura
 If you see `active profile is 'main'` together with `Falling back to .../.hermes`, set the active profile explicitly and run setup again:
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 `HERMES_HOME` defines the profile boundary. Use the same value that Hermes uses to start the target profile; each profile has separate configuration, database, and sessions.
@@ -168,15 +219,18 @@ The update runs in the background using Hermes's own Python interpreter, with th
 For the first upgrade from v0.1.0, or to update from a terminal:
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main" # Use your actual profile path
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$HERMES_PY" --upgrade hermes-kiokuko
 else
   "$HERMES_PY" -m pip install --upgrade hermes-kiokuko
 fi
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 Wait for the update to finish, then restart the Hermes process. For Telegram/Discord, restart the Hermes Gateway process serving those chats: a new chat session does not reload the installed plugin code. No OS reboot is needed. If a service manages the Gateway, verify its launch interpreter too: restarting from a different terminal Python does not change the service configuration.
@@ -186,11 +240,14 @@ Wait for the update to finish, then restart the Hermes process. For Telegram/Dis
 The command is not registered in that Gateway. An unregistered update command cannot repair this state. Check configuration and registration from a terminal using the same Python and profile. This example targets `main`:
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 "$HERMES_PY" -m hermes_kiokuko setup
 "$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+)
 ```
 
 `--load-plugin` loads configured Hermes plugins into this terminal process and checks ownership and registration of all four Kiokuko commands. Ordinary `doctor` does not load plugins and reports `checked: false` for command registration. Neither proves what the running Gateway loaded. The `enabled` label in `hermes plugins list` also describes configuration, rather than successful loading.
@@ -210,11 +267,17 @@ Check that `/commands` in the chat lists `kiokuko-update`. If terminal registrat
 If loading still fails, check the Python and checkout used to run Hermes.
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
-cd "$HOME/.hermes/hermes-agent" || exit 1
-test -f hermes_yaml.py || { echo 'Hermes source is missing hermes_yaml.py'; exit 1; }
+cd "$HOME/.hermes/hermes-agent"
+if [ ! -f hermes_yaml.py ]; then
+  printf '%s\n' 'Hermes source is missing hermes_yaml.py'
+  false
+fi
 "$HERMES_PY" -c 'import hermes_yaml; from hermes_cli.plugins import get_plugin_commands; print(hermes_yaml.__file__)'
 "$HERMES_PY" -m hermes_kiokuko doctor --load-plugin
+)
 ```
 
 If Hermes requires this module but the file is absent, repair the missing or inconsistent Hermes source. If the file exists but dependencies such as `ruamel.yaml` are missing, repair them using Hermes's own installation procedure. Kiokuko does not inject an alternative YAML implementation or skip host compatibility checks. After the terminal checks pass, restart the target Gateway and verify commands in chat.
@@ -226,9 +289,11 @@ Reinstallation is **not required on every startup**. Use the normal update proce
 Transfer the wheel to the machine running Hermes and set `WHEEL` to its actual path; replace `VERSION` below with the supplied filename's version. Use the target profile's `HERMES_HOME`. The `--no-deps` option assumes Kiokuko's dependencies are already installed in this Hermes environment; omit it for a first installation that needs dependencies.
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 export HERMES_HOME="$HOME/.hermes/profiles/main"
-cd "$HOME/.hermes/hermes-agent" || exit 1
+cd "$HOME/.hermes/hermes-agent"
 
 WHEEL="$HOME/hermes_kiokuko-VERSION-py3-none-any.whl"
 
@@ -240,6 +305,7 @@ fi
 
 "$HERMES_PY" -c 'from plugins.memory import find_provider_dir; p = find_provider_dir("kiokuko"); print(p); assert p is not None'
 "$HERMES_PY" -m hermes_kiokuko doctor
+)
 ```
 
 For a first installation, run `setup` for the target profile before `doctor`, as shown above. A detected directory confirms discovery in this CLI process; it does not prove the running Gateway loaded the package. After installation succeeds and `doctor` reports `ok: true`, restart the Hermes process serving the target profile. If detection returns `None` or `doctor` fails, see [provider discovery and host diagnostics](docs/operations.md).
@@ -256,9 +322,12 @@ Reply in Japanese.
 Model proposals and natural-language requests such as “remember this” become pending candidates. Review and approve them from the CLI:
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko pending
 "$HERMES_PY" -m hermes_kiokuko approve CANDIDATE_ID
+)
 ```
 
 `kioku-curation` rechecks verified project memories and lets you share selected items as Global memories within the same profile.
@@ -275,10 +344,13 @@ From an interactive Hermes CLI session in the project directory (v0.1.1+):
 Replace `CODE` with the confirmation code shown after `share`. Use `cancel` to exit without sharing. Global memories are shared with every user and project in the profile. Gateway chats (DM/group) cannot use this administrative flow; run it from the local CLI. The terminal command is also available:
 
 ```sh
+(
+set -e
 : "${HERMES_PY:?Set HERMES_PY to the Python executable used by the target Hermes process}"
 "$HERMES_PY" -m hermes_kiokuko curation
 # Or, when the venv bin directory is on PATH:
 kioku-curation
+)
 ```
 
 See [curation details](docs/curation.md), [operational boundaries](docs/operations.md), and [verification](docs/verification.md).
