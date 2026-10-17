@@ -1,4 +1,4 @@
-現行HermesのPM環境では[READMEのnative導入手順](../README_ja.md#現行hermesのpmで導入する)を使います。この文書の直接pip更新は旧Hermes専用です。PM環境では同じprofileの `hermes plugins list` と plugins/ 配下の保存先を確認し、`hermes plugins update "$KIOKUKO_PLUGIN_KEY"` に実際の相対ディレクトリキーを渡します。manifestの表示名から固定キーを推測しません。
+現行HermesのPM環境では[READMEのnative導入・更新手順](../README_ja.md#現行hermesのpmで導入する)を使います。この文書の直接pip更新は旧Hermes専用です。標準のmain導入は `HERMES_HOME="$HOME/.hermes/profiles/main" hermes --profile main plugins update kiokuko-tools` で更新し、同じprofileの `kiokuko setup` と `kiokuko doctor --load-plugin` を続けます。依存準備の `[y/N]` は表示内容を確認して `y` とEnterで同意します。Enterだけでは更新は進みません。保存先が標準と異なる導入だけ、READMEの補足で相対ディレクトリを確認して更新引数を置き換えてください。
 
 # 運用と境界
 

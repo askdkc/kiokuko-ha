@@ -14,9 +14,9 @@ Kiokukoは標準`tomllib`を必要とするためPython 3.11以降を要求し�
 
 CLIやGatewayが使うprofileに合わせて、以下の手順を選んでください。例は標準の`$HOME/.hermes`を使います。独自のrootを使っている場合は、この部分を対象Hermesのrootに置き換えます。`--profile`も明示するため、保存済みのactive profileによってdefault用のコマンドが別profileへ向かうのを防げます。
 
-最初に、対象profileの `plugins list` で導入元を確認してください。配布元の `askdkc/kiokuko-ha`、Python package の `hermes-kiokuko`、manifest の表示名 `kiokuko-tools`、更新用の保存先キーは別の識別子です。`plugins update` は `$HERMES_HOME/plugins/` からの相対ディレクトリを受け取ります。表示名から固定キーを推測しないでください。
+対象profileの `plugins list` で導入元を確認してください。標準のGit導入先は `$HERMES_HOME/plugins/kiokuko-tools/` なので、以下の更新コマンドは `kiokuko-tools` を直接指定します。`plugins update` の引数は `$HERMES_HOME/plugins/` からの相対ディレクトリです。配布元の `askdkc/kiokuko-ha` やPython packageの `hermes-kiokuko` は、この引数ではありません。
 
-- Gitから導入したplugin：以下の更新手順で、実際の保存先キーを使います。
+- Gitから標準導入したplugin：以下の更新手順をそのまま使います。保存先が標準と異なる場合だけ、下の補足を確認してください。
 - 一覧にない場合：まずprofileと使用中の `hermes` を確認し、このprofileに未導入なら初回導入を使います。
 - `entrypoint`（旧pip導入）だけの場合：ダウンロード型ではありません。以下の初回Git導入か、このREADMEの旧Hermes用pip手順を、対象の配布方式に合わせて選びます。
 - `bundled` は個別の `plugins update` の対象ではありません。Hermes本体の更新対象です。
@@ -40,17 +40,12 @@ defaultの保存先は`$HOME/.hermes`直下です。
 )
 ```
 
-既存のGit導入を更新する場合：一覧と保存先を確認し、プロンプトに完全な相対キーを入力します。例えば `.../plugins/kiokuko-ha/plugin.yaml` なら `kiokuko-ha`、`.../plugins/custom/kiokuko-ha/plugin.yaml` なら `custom/kiokuko-ha` です。現在の新規導入が `kiokuko-tools` でも、以前の導入に同じキーを仮定しないでください。該当するダウンロードがなければ空入力で中断します。
+既存の標準Git導入を更新：
 
 ```sh
 (
   export HERMES_HOME="$HOME/.hermes"
-  hermes --profile default plugins list --no-bundled &&
-  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
-  printf 'Downloaded plugin directory key (empty to stop): ' &&
-  read -r KIOKUKO_PLUGIN_KEY &&
-  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
-  hermes --profile default plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile default plugins update kiokuko-tools &&
   hermes --profile default kiokuko setup &&
   hermes --profile default kiokuko doctor --load-plugin
 )
@@ -78,21 +73,20 @@ HERMES_HOME="$HOME/.hermes" hermes --profile default gateway restart
 )
 ```
 
-既存のGit導入を更新する場合：一覧と保存先を確認し、プロンプトに完全な相対キーを入力します。例えば `.../plugins/kiokuko-ha/plugin.yaml` なら `kiokuko-ha`、`.../plugins/custom/kiokuko-ha/plugin.yaml` なら `custom/kiokuko-ha` です。現在の新規導入が `kiokuko-tools` でも、以前の導入に同じキーを仮定しないでください。該当するダウンロードがなければ空入力で中断します。
+既存の標準Git導入を更新：
 
 ```sh
 (
   export HERMES_HOME="$HOME/.hermes/profiles/main"
-  hermes --profile main plugins list --no-bundled &&
-  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
-  printf 'Downloaded plugin directory key (empty to stop): ' &&
-  read -r KIOKUKO_PLUGIN_KEY &&
-  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
-  hermes --profile main plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile main plugins update kiokuko-tools &&
   hermes --profile main kiokuko setup &&
   hermes --profile main kiokuko doctor --load-plugin
 )
 ```
+
+更新中に `Prepare these with Hermes through PM now? [y/N]:` とPyYAMLなどの依存準備を尋ねられたら、表示内容を確認して `y` とEnterを入力します。Enterだけでは同意せず、依存準備と更新は進みません。この確認はHermesのPM依存管理によるものです。初回導入の `--yes-deps` はPython依存準備への事前同意ですが、`plugins update` にはこのオプションはありません。
+
+保存先が標準と異なる場合だけ、同じprofileの `plugins list --no-bundled` と `find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print` で対象を確認し、更新コマンドの `kiokuko-tools` を実際の相対ディレクトリに置き換えます。例えば `.../plugins/kiokuko-ha/plugin.yaml` なら `kiokuko-ha`、`.../plugins/custom/kiokuko-ha/plugin.yaml` なら `custom/kiokuko-ha` です。manifestの表示名だけでは保存先を判断できません。
 
 doctorの `ok: true` と `command_registration.ok: true` を確認してから、担当Gatewayを再起動します。
 
@@ -144,7 +138,7 @@ hermes --profile main pm doctor
 
 Gateway の起動診断にある Python、prefix、profile、plugin の場所、関係する検索パスを PM の選択環境と照合します。同じ Python 実行ファイルでも、読み込む PM 環境は異なる場合があります。古い venv の doctor 成功が証明するのは、その古いプロセスだけです。
 
-PM が記録済み環境の破損を報告する場合は `hermes --profile main pm repair`、追跡されたGitの更新は、上記main用の更新ブロックで保存先を確認して実キーを入力します。エラーを解消してから `hermes --profile main kiokuko doctor --load-plugin` を確認し、担当 Gateway を再起動して Discord の `/commands` と `/kiokuko-update status` を確認します。新しい Gateway でも正常な選択環境を読み込めない場合は、起動時の証拠を Hermes の不具合報告に残します。`src` の強制追加や PM 環境への pip 導入は行いません。
+PM が記録済み環境の破損を報告する場合は `hermes --profile main pm repair`、追跡されたGitの更新は、上記main用の更新ブロックを使います。保存先が標準と異なる導入だけ、補足に従って更新引数を置き換えます。エラーを解消してから `hermes --profile main kiokuko doctor --load-plugin` を確認し、担当 Gateway を再起動して Discord の `/commands` と `/kiokuko-update status` を確認します。新しい Gateway でも正常な選択環境を読み込めない場合は、起動時の証拠を Hermes の不具合報告に残します。`src` の強制追加や PM 環境への pip 導入は行いません。
 
 `runtime_provenance` は設定 manifest、現在のディスク版、読み込み済みコードの fingerprint・版、distribution metadata、PM 選択を分けて表示します。PM 情報を取得できない場合は確認不能です。端末診断は常にその端末プロセスを記述します。managed 版のチャット status は、ローカルパスを出さず、短いコード識別と再起動の案内を表示します。版番号の一致だけでは更新反映を証明できません。
 

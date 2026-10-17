@@ -14,9 +14,9 @@ Current Hermes manages plugin code and Python dependencies together. Install dir
 
 Choose the procedure for the profile serving your CLI or Gateway. These examples use the standard `$HOME/.hermes` root. For a custom root, replace that prefix with the root used by your Hermes installation. The explicit `--profile` also prevents a saved active profile from redirecting the default-profile commands.
 
-First inspect `plugins list` in the profile you intend to update. The repository source `askdkc/kiokuko-ha`, Python distribution `hermes-kiokuko`, manifest display name `kiokuko-tools`, and update key are distinct identifiers. `plugins update` takes a directory relative to `$HERMES_HOME/plugins/`; never infer a fixed key from the display name.
+Check the source with `plugins list` in the target profile. A standard Git installation lives at `$HERMES_HOME/plugins/kiokuko-tools/`, so the update commands below use `kiokuko-tools` directly. The argument to `plugins update` is a directory relative to `$HERMES_HOME/plugins/`; the repository source `askdkc/kiokuko-ha` and Python distribution `hermes-kiokuko` are different identifiers.
 
-- Git-installed plugin: use its actual download directory key in the update block below.
+- Standard Git installation: use the update block below as written. If its directory differs, see the exception below.
 - No matching installation: check the profile and `hermes` launcher first; use first installation only if it is absent from this profile.
 - `entrypoint` only (legacy pip installation): this is not a downloaded plugin. Choose first Git installation below or the legacy Hermes pip procedure later in this README, according to the serving installation.
 - `bundled`: individual `plugins update` is unavailable; update Hermes itself.
@@ -40,17 +40,12 @@ First installation:
 )
 ```
 
-Update an existing Git installation: inspect the listing and paths, then enter the full relative directory key at the prompt. For example, `.../plugins/kiokuko-ha/plugin.yaml` means `kiokuko-ha`; `.../plugins/custom/kiokuko-ha/plugin.yaml` means `custom/kiokuko-ha`. A new installation may use `kiokuko-tools`; older installations need not. Submit an empty key to stop if no matching download exists.
+Update an existing standard Git installation:
 
 ```sh
 (
   export HERMES_HOME="$HOME/.hermes"
-  hermes --profile default plugins list --no-bundled &&
-  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
-  printf 'Downloaded plugin directory key (empty to stop): ' &&
-  read -r KIOKUKO_PLUGIN_KEY &&
-  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
-  hermes --profile default plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile default plugins update kiokuko-tools &&
   hermes --profile default kiokuko setup &&
   hermes --profile default kiokuko doctor --load-plugin
 )
@@ -78,21 +73,20 @@ First installation:
 )
 ```
 
-Update an existing Git installation: inspect the listing and paths, then enter the full relative directory key at the prompt. For example, `.../plugins/kiokuko-ha/plugin.yaml` means `kiokuko-ha`; `.../plugins/custom/kiokuko-ha/plugin.yaml` means `custom/kiokuko-ha`. A new installation may use `kiokuko-tools`; older installations need not. Submit an empty key to stop if no matching download exists.
+Update an existing standard Git installation:
 
 ```sh
 (
   export HERMES_HOME="$HOME/.hermes/profiles/main"
-  hermes --profile main plugins list --no-bundled &&
-  find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print &&
-  printf 'Downloaded plugin directory key (empty to stop): ' &&
-  read -r KIOKUKO_PLUGIN_KEY &&
-  [ -n "$KIOKUKO_PLUGIN_KEY" ] &&
-  hermes --profile main plugins update "$KIOKUKO_PLUGIN_KEY" &&
+  hermes --profile main plugins update kiokuko-tools &&
   hermes --profile main kiokuko setup &&
   hermes --profile main kiokuko doctor --load-plugin
 )
 ```
+
+If the update asks `Prepare these with Hermes through PM now? [y/N]:` for PyYAML or other dependencies, review the list and type `y` followed by Enter to prepare them. Enter alone declines; dependency preparation and the update will not proceed. Hermes owns this PM dependency consent prompt. The first-install `--yes-deps` option gives advance consent for Python dependencies; `plugins update` has no such option.
+
+Only if the installation directory differs from the standard path: use `plugins list --no-bundled` in the same profile and `find "$HERMES_HOME/plugins" -maxdepth 3 -name plugin.yaml -print` to confirm it, then replace `kiokuko-tools` in the update command with that relative directory. For example, `.../plugins/kiokuko-ha/plugin.yaml` means `kiokuko-ha`; `.../plugins/custom/kiokuko-ha/plugin.yaml` means `custom/kiokuko-ha`. The manifest display name alone does not establish the directory.
 
 After doctor reports `ok: true` and `command_registration.ok: true`, restart the serving Gateway:
 
@@ -144,7 +138,7 @@ hermes --profile main pm doctor
 
 Compare the Gateway startup diagnostic's Python, prefix, profile, plugin path and relevant search paths with the PM selection. The same Python executable can load different PM environments. A successful doctor in an old venv proves only that old process.
 
-If PM reports a damaged recorded environment, use `hermes --profile main pm repair`. For a tracked Git update, use the main-profile update block above to inspect the download directory and enter its actual key. Check errors before continuing. Then run `hermes --profile main kiokuko doctor --load-plugin`, restart the serving Gateway, and verify `/commands` and `/kiokuko-update status` in Discord. If a fresh Gateway still cannot activate a healthy selected environment, retain the startup evidence for a Hermes issue; do not inject `src` or pip-install into PM generations.
+If PM reports a damaged recorded environment, use `hermes --profile main pm repair`. For a tracked Git update, use the main-profile update block above. Only installations with a different directory need the argument replacement described above. Check errors before continuing. Then run `hermes --profile main kiokuko doctor --load-plugin`, restart the serving Gateway, and verify `/commands` and `/kiokuko-update status` in Discord. If a fresh Gateway still cannot activate a healthy selected environment, retain the startup evidence for a Hermes issue; do not inject `src` or pip-install into PM generations.
 
 `runtime_provenance` separates the configured manifest, current disk version, loaded code fingerprint/version, distribution metadata and PM selection. Unavailable PM information is unknown. Terminal diagnostics always describe their own process. Managed chat status displays a short loaded fingerprint and restart advice without local paths. Equal version numbers alone do not prove that an update was loaded.
 
