@@ -455,7 +455,7 @@ def status(service):
             'retention_days': 7, 'max_bytes': RETENTION_BYTES}
 
 
-def end_session(service, messages):
+def end_session(service, messages, *, session_id=None, code=None):
     # Explicit signed host history identifies the closing turn; no mutable-session fallback.
     if service is None:
         return
@@ -470,6 +470,8 @@ def end_session(service, messages):
         from .compaction import signed_snapshot
         with service.transaction() as db:
             snap = signed_snapshot(service,db,users[-1])
-        manager.abort(snap)
+            if session_id is not None and snap.session_id != session_id:
+                raise KiokukoError('MONITOR_END_CONTEXT_MISSING')
+        manager.abort(snap, code=code)
     except KiokukoError:
         runtime.record_status('MONITOR_END_CONTEXT_MISSING',service)

@@ -59,6 +59,14 @@ class KiokukoMemoryProvider(MemoryProvider):
                 run_capture(self._service, messages, "post_compress")
         except KiokukoError as error:
             runtime.record_status(error.code, self._service)
+            # An optional save can fail after the host completed the response.
+            # Close only that authenticated turn; do not strand its capture or
+            # treat failed storage as a completed sync/extraction opportunity.
+            try:
+                from .monitor import end_session
+                end_session(self._service, messages, session_id=session_id, code=error.code)
+            except Exception:
+                runtime.record_status("MONITOR_COMPLETION_FAILED", self._service)
 
     def on_session_switch(self, new_session_id, *, parent_session_id="", reset=False, rewound=False, **kwargs):
         if self._service:

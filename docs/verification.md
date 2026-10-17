@@ -10,6 +10,14 @@ TOMLの解析、PyYAMLの安全なroundtrip・型保持・Python object tagの�
 必須API・keyword・実同期動作を検査します。版数を書き換えた試験は能力判定の回帰試験であり、
 未実行のPython/PyYAML新版全体が動く証明ではありません。
 
+file fact・task profileの通常機能とGateway並行middlewareのscope試験は、memoryの
+deadline参照だけをtest-localな論理時計で制御します。標準`time`、thread、HTTP、SDKの
+時計は変更しません。従来のprofile準備だけを5秒へ延ばすhelperは使いません。
+本番の検索・profile取得150msとhook全体500msはそのままに、期限直前・期限ちょうど・
+期限後とrollbackを別の決定的試験で確認します。これらはwall-clock性能の証明ではなく、
+負荷時に本番の期限へ達してcontextを提供できない制約は残ります。期限はcommit直前まで
+検査し、commit/fsyncまで含む厳密な応答時間の上限を保証するものではありません。
+
 `--host`には検証したい実際のHermes checkoutを指定します。現在版の検証では
 `KIOKUKO_HERMES_FIXTURE`を設定しません。PM検証scriptの`--fixture`は、明示した旧版の
 checksumを再現するときだけ追加します。fixtureカタログは本番・現在版の許可リストではありません。
@@ -36,17 +44,42 @@ PMのAPIだけを先に調べる場合は、配布物を渡さず
 `verify_pm_lifecycle.py --host "$hermes_host" --check-host-only`を使えます。
 実導入の検証をこの事前検査だけで成功扱いにはしません。
 
-残す固定値は、自パッケージ版、標準APIに対応するPython下限と従来の依存下限、明示的な旧版回帰fixture、
+残す固定値は、自パッケージ版、使用API・形式に対応するPython・依存関係の下限、明示的な旧版回帰fixture、
 同梱Orcaコードのcommit・bundle hash・元lock解決値、DB/trace/wireの形式番号です。
 Nodeも版数比較を撤去し、同梱writerの実起動・protocol handshakeで判定します。traceや設定は作成せず、結果は実行ファイルとbundleの識別に対してcacheします。bundleのbuild targetはnode22のままです。
 読込済みコードとディスク上の版・fingerprintの照合は更新後の再起動診断です。
+
+2026-10-17の追加監査で、PyYAML・pytestの下限を使用APIに合わせ、PEP 639 metadataに
+必要なsetuptools下限を修正しました。Hermesの未知の版情報を診断値へ正規化し、
+経験学習の評価はdataset版ラベルではなく実際のcorpusと型を検査します。
+根拠と判定条件は[運用手順](operations.md#設定と互換性)に記載しています。
+以下の703件を含む全体試験・実導入結果はこの追加修正前の記録であり、現在のソース・
+配布物・導入済み環境・稼働中processの検証結果には転用しません。
+
+## 2026-10-16：互換性判定の変更と0.1.21の検証記録
 
 この変更の限定検証では、Python/PyYAMLの旧制限で9件失敗し、修正後の現在host・原文探索・
 署名継続を含む67件が成功しました。一時コピーへ制限を戻すと同じ9件が失敗します。
 Nodeの版数だけ不明な正常runtimeは旧判定で失敗し、実writer検査とYAMLの型保持検査への修正後は関連80件が成功、
 旧判定を戻すと再び失敗します。API/keyword欠落、unsafe YAML、不正writer protocolも拒否します。
 現在hostでの実PM導入・更新・cold boot・失敗時の状態保持も成功しています。
-以下の685件はこの上限撤去とNode判定変更より前の結果です。現変更の全体試験は未実施です。
+0.1.20の全体試験はPython 3.14.7と公式Hermes 0.22.1の現在hostモードで、**702 passed**、
+upstream非推奨API警告92件、136.97秒でした。`KIOKUKO_HERMES_FIXTURE`は未設定、
+skip・除外なし、試験中のソース変更なしです。最終ソースと配布物の指紋を先に照合し、
+Git外の専用一時領域と隔離profileを使用しました。検証後の変更はこの結果の記録だけです。
+以下の685件はこの上限撤去とNode判定変更より前の実行記録です。
+
+702件の全体試験は0.1.20のソースが対象です。その後の0.1.21への更新は
+版情報4箇所を揃えたものです。版更新直後のeditable metadataの古さに試験結果が
+左右されないよう、provenance試験のdistribution入力を明示し、版の食い違いを検出する
+独立した回帰試験を追加しました。runtimeの能力判定・検索・署名・監視のロジックは同じです。
+版更新後の整合試験と配布物検証は、上記702件の結果と区別します。
+
+0.1.21の最終全体試験も同じ現在hostモードで実行し、**703 passed**、upstream警告92件、
+124.20秒でした。旧fixture指定なし、skip・除外・試験中のソース変更なしです。
+試験前にソースと配布物の指紋・100ファイルの一致を確認しました。版整合・provenance・
+能力検査の59件、実導入wheelの31件、実PMの導入・更新・cold bootも成功しています。
+全体試験後の変更はこの結果の記録だけで、runtime・テスト・metadataは同じです。
 
 ## 2026-10-16：0.1.20のcontext失敗処理と署名のredaction衝突
 

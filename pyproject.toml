@@ -1,10 +1,11 @@
 [build-system]
-requires = ["setuptools>=68"]
+# PEP 639 license expressions and project.license-files require this backend API.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hermes-kiokuko"
-version = "0.1.20"
+version = "0.1.21"
 description = "Scoped, human-approved memory for Hermes Agent"
 readme = "README.md"
 authors = [{name = "dkc"}]
@@ -12,13 +13,15 @@ license = "MIT"
 license-files = ["LICENSE"]
 # tomllib is part of the standard library from Python 3.11 onward.
 requires-python = ">=3.11"
-dependencies = ["PyYAML>=6"]
+# safe_dump(sort_keys=...) was added in 5.1; safe behavior is also probed at runtime.
+dependencies = ["PyYAML>=5.1"]
 
 [project.scripts]
 kioku-curation = "hermes_kiokuko.curation:main"
 
 [project.optional-dependencies]
-test = ["pytest>=8", "PyYAML>=6", "build"]
+# The builtin pythonpath configuration used below was added in pytest 7.
+test = ["pytest>=7", "PyYAML>=5.1", "build"]
 
 [project.entry-points."hermes_agent.plugins"]
 kiokuko-tools = "hermes_kiokuko.plugin_entry"

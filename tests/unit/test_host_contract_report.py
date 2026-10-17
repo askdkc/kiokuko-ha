@@ -56,11 +56,28 @@ def test_compatible_contract(modules):
     assert host_contract_report()['ok']
 
 
-@pytest.mark.parametrize('version', ['0.22.1', '0.23.0', '0.99.123', '1.0.0', '0.0.0', 'development', None])
+@pytest.mark.parametrize('version', ['0.19.0', '0.20.9', '0.22.1', '0.23.0', '0.99.123', '1.0.0', '0.0.0', 'development', None])
 def test_compatible_apis_do_not_depend_on_release_metadata(modules, version):
     modules['hermes_cli'].__version__ = version
     report = host_contract_report()
     assert report['ok'], report['failed_checks']
+
+
+@pytest.mark.parametrize('version', [[], {}, ['0', '22'], {'major':0}, object()])
+def test_unknown_metadata_shapes_are_only_diagnostic(modules, version):
+    modules['hermes_cli'].__version__ = version
+    report = host_contract_report()
+    assert report['ok'], report['failed_checks']
+    assert report['hermes_version'] is None
+
+
+@pytest.mark.parametrize('version', [[], {}, SimpleNamespace(major=0)])
+def test_unknown_canonical_metadata_preserves_capability_admission(modules, version):
+    modules['hermes_cli'].__version__ = '0.0.0'
+    modules['hermes_cli.version_info'].get_version_info = lambda: SimpleNamespace(base_version=version)
+    report = host_contract_report()
+    assert report['ok'], report['failed_checks']
+    assert report['hermes_version'] == '0.0.0'
 
 
 @pytest.mark.parametrize('python', [(3, 11), (3, 12), (3, 14), (3, 15), (3, 99), (4, 0)])
@@ -74,16 +91,41 @@ def test_python_metadata_does_not_reject_working_runtime(modules, monkeypatch, p
     assert '.'.join(map(str, python)) in SpecifierSet(project['requires-python'])
 
 
-def test_package_yaml_declaration_accepts_compatible_future_release():
+@pytest.mark.parametrize('version', ['5.1', '5.4.1', '6.0.3', '7.0', '99.0'])
+def test_yaml_declaration_matches_safe_dump_sort_keys_api(version):
     from packaging.requirements import Requirement
     project = tomllib.loads((Path(__file__).resolve().parents[2] / 'pyproject.toml').read_text())['project']
     dependency = next(Requirement(d) for d in project['dependencies'] if Requirement(d).name.lower() == 'pyyaml')
-    assert '7.0' in dependency.specifier
-    assert '99.0' in dependency.specifier
+    assert version in dependency.specifier
+    assert '5.0' not in dependency.specifier  # sort_keys was added in the 5.1 API.
+    test_dependency = next(Requirement(d) for d in project['optional-dependencies']['test']
+                           if Requirement(d).name.lower() == 'pyyaml')
+    assert dependency.specifier == test_dependency.specifier
 
 
-def test_future_yaml_metadata_uses_safe_operations(modules):
-    modules['yaml'].__version__ = '99.0'
+def test_build_floor_matches_used_pep639_metadata():
+    from packaging.requirements import Requirement
+    project = tomllib.loads((Path(__file__).resolve().parents[2] / 'pyproject.toml').read_text())
+    backend = next(Requirement(d) for d in project['build-system']['requires']
+                   if Requirement(d).name.lower() == 'setuptools')
+    assert isinstance(project['project']['license'], str) and project['project']['license-files']
+    assert '76.0' not in backend.specifier  # These fields require the PEP 639 API.
+    assert '77.0' in backend.specifier and '99.0' in backend.specifier
+
+
+def test_test_floor_matches_builtin_pythonpath_configuration():
+    from packaging.requirements import Requirement
+    project = tomllib.loads((Path(__file__).resolve().parents[2] / 'pyproject.toml').read_text())
+    dependency = next(Requirement(d) for d in project['project']['optional-dependencies']['test']
+                      if Requirement(d).name.lower() == 'pytest')
+    assert project['tool']['pytest']['ini_options']['pythonpath']
+    assert '7.0' in dependency.specifier and '99.0' in dependency.specifier
+    assert '6.2' not in dependency.specifier
+
+
+@pytest.mark.parametrize('version', ['5.1', '5.4.1', '6.0.3', '99.0', 'unknown', None])
+def test_yaml_metadata_uses_safe_operations(modules, version):
+    modules['yaml'].__version__ = version
     assert host_contract_report()['ok']
 
 
@@ -100,6 +142,7 @@ def test_missing_toml_operation_rejected(modules, monkeypatch, api):
 
 @pytest.mark.parametrize('api', ['safe_load', 'safe_dump', 'YAMLError'])
 def test_yaml_missing_api_rejected(modules, api):
+    modules['yaml'].__version__ = '6.0.3'  # A known label cannot replace the API.
     delattr(modules['yaml'], api)
     report = host_contract_report()
     assert report['error'] == 'HOST_CONTRACT_MISMATCH'

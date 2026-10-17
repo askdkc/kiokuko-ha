@@ -14,7 +14,7 @@ from hermes_kiokuko.workspace import resolve_workspace
 
 
 @pytest.fixture
-def project(service, tmp_path):
+def project(service, tmp_path, logical_deadline_clock):
     root = tmp_path / "project"
     root.mkdir()
     (root / "config.json").write_text('{"language":"ja","port":8000,"enabled":true}')

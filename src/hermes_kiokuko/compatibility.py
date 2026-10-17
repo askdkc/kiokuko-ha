@@ -152,6 +152,11 @@ def _memory_sync_probe(manager_type, methods):
     return result
 
 
+def _release_label(value):
+    """Pure diagnostic normalization; unknown identity never decides admission."""
+    return value if type(value) is str else None
+
+
 def host_contract_report():
     """Report the exact import/API checks without dumping arbitrary exception text."""
     import importlib
@@ -174,12 +179,13 @@ def host_contract_report():
             if isinstance(missing, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', missing):
                 detail['missing_module'] = missing
             checks.append(detail)
-    version = getattr(modules.get('hermes_cli'), '__version__', None)
+    version = _release_label(getattr(modules.get('hermes_cli'), '__version__', None))
     if version == '0.0.0':
         try:
             identity = importlib.import_module('hermes_cli.version_info').get_version_info()
-            if identity.base_version != 'unknown':
-                version = identity.base_version
+            label = _release_label(identity.base_version)
+            if label not in {None, 'unknown'}:
+                version = label
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError):
             pass
     dispatch = dispatch_contract_report(modules.get('hermes_cli'), version)
@@ -296,7 +302,7 @@ def tool_availability_check(tool_name):
 
 def dispatch_contract_report(hermes_module, version):
     """Identify tested fixture sources, without executing a command in doctor."""
-    audited = AUDITED_DISPATCH_SOURCES.get(version)
+    audited = AUDITED_DISPATCH_SOURCES.get(_release_label(version))
     matched = False
     module_path = getattr(hermes_module, '__file__', None)
     if audited and module_path:

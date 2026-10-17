@@ -12,6 +12,18 @@ from hermes_kiokuko import __version__, provenance
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.fixture(autouse=True)
+def installed_distribution(monkeypatch):
+    # These PM/source tests control their distribution input too. An editable
+    # checkout may have just changed release version before rebuilding egg-info.
+    # Actual distribution drift is exercised independently below.
+    distribution = SimpleNamespace(version=__version__, locate_file=lambda _: ROOT / 'src')
+    original = provenance.importlib.metadata.distribution
+    monkeypatch.setattr(provenance.importlib.metadata, 'distribution',
+                        lambda name: distribution if name == 'hermes-kiokuko' else original(name))
+    return distribution
+
+
 def test_entry_missing_package_logs_process_and_preserves_exception(tmp_path):
     code = "import runpy; runpy.run_path('__init__.py')['register'](None)"
     import os
@@ -68,6 +80,18 @@ def test_same_python_stale_selection_or_foreign_package_needs_restart(monkeypatc
 def test_same_version_changed_code_needs_restart(monkeypatch):
     monkeypatch.setattr(provenance, '_fingerprint', lambda: 'new-code')
     assert provenance.runtime_provenance()['restart_required'] is True
+
+
+def test_changed_distribution_version_needs_restart(monkeypatch, installed_distribution):
+    monkeypatch.setattr(provenance, 'pm_environment', lambda: {
+        'checked': True, 'selected_environment': '/generation/.venv',
+        'active': True, 'package_in_generation': True})
+    installed_distribution.version = __version__ + '+changed'
+    info = provenance.runtime_provenance()
+    assert info['loaded']['version'] == __version__
+    assert info['distribution']['version'] == installed_distribution.version
+    assert info['loaded']['files_changed'] is False
+    assert info['restart_required'] is True
 
 
 def test_snapshot_path_is_valid_without_matching_directory_plugin_path(monkeypatch, tmp_path):

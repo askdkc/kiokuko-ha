@@ -28,16 +28,43 @@ from hermes_kiokuko.store import Store
 from hermes_kiokuko.model_job import model_job
 
 
+def validated_corpus_records(report, gold):
+    """Pure report admission by actual corpus/protocol, independent of its label.
+
+    Dataset version names are descriptive. Full, typed gold content and exactly
+    one record per case/variant establish comparability; a familiar name cannot.
+    """
+    if not isinstance(report, dict) or report.get('real_model') is not True:
+        raise ValueError('A real-model report is required.')
+    if not isinstance(gold, dict) or not gold or not isinstance(report.get('results'), list):
+        raise ValueError('A nonempty corpus and result array are required.')
+    grouped={'legacy':[], 'new':[]}
+    for record in report['results']:
+        if not isinstance(record, dict) or record.get('variant') not in ('legacy', 'new'):
+            raise ValueError('Unknown or missing evaluation variant.')
+        case_id=record.get('case_id')
+        if not isinstance(case_id, str) or case_id not in gold:
+            raise ValueError('Result case differs from the current corpus.')
+        if canonical(record.get('gold')) != canonical(gold[case_id]):
+            raise ValueError('Typed gold content differs from the current corpus.')
+        if not isinstance(record.get('review'), dict) or not isinstance(record.get('accepted'), list):
+            raise ValueError('Review mapping and accepted-output array are required.')
+        grouped[record['variant']].append(record)
+    for records in grouped.values():
+        if len(records) != len(gold) or {r['case_id'] for r in records} != set(gold):
+            raise ValueError(f'The acceptance gate requires all {len(gold)} cases exactly once per variant.')
+    return grouped
+
+
 def score(report):
-    if report.get('dataset') != 'learning_cases-v1' or report.get('real_model') is not True:
-        raise ValueError('A real-model report for learning_cases-v1 is required.')
     gold={c['id']:c for c in cases()}
+    grouped=validated_corpus_records(report, gold)
     summaries={}
     for variant in ('legacy','new'):
-        records=[r for r in report['results'] if r['variant']==variant]
+        records=grouped[variant]
         labels=[r['review'] for r in records]
         if len(records) != len(gold) or {r['case_id'] for r in records} != set(gold):
-            raise ValueError('The acceptance gate requires all 60 cases for each variant.')
+            raise ValueError(f'The acceptance gate requires all {len(gold)} cases for each variant.')
         if not records or any(v is None for label in labels for v in label.values()):
             raise ValueError('Complete every review label before scoring; automated checks do not establish semantic correctness.')
         required={'extracted_count','grounded_relevant_count','unsupported_success_count','duplicate_count','recovery_preserved','lesson_offered','lesson_applicable'}

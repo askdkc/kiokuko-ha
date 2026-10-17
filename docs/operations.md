@@ -11,6 +11,24 @@ context準備が失敗したturnは失敗コードを表示し、開始済みの
 
 ## 設定と互換性
 
+Hermesの版情報は診断用です。文字列でない未知の版情報は「不明」として扱い、
+必須API・keyword・同期動作の検査で利用可否を判定します。未知の版ラベルだけでは拒否せず、
+既知の版ラベルだけでAPI欠落を許可しません。
+
+最低条件は使用機能に対応します。Python 3.11は標準`tomllib`、PyYAML 5.1は
+`safe_dump(sort_keys=...)`、pytest 7は組込み`pythonpath`設定、setuptools 77は
+`project.license`のSPDX文字列と`project.license-files`を使うPEP 639 metadataのためです。
+PyYAMLの安全な読み書き・型保持・Python object tag拒否も実動作で検査します。
+根拠は[PyYAML変更履歴](https://github.com/yaml/pyyaml/blob/main/CHANGES)、
+[pytest変更履歴](https://docs.pytest.org/en/stable/changelog.html#pytest-7-0-0rc1-2021-12-06)、
+[setuptoolsのmetadata仕様](https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html)です。
+
+経験学習の評価では、`dataset`の版ラベルを受理条件にしません。実際の全case・variant・
+型を含むgold内容・レビュー形式を検証し、欠落・重複・未知variant・改変を拒否します。
+実モデルの標識、人手レビュー、独立したboundary suiteの必要条件は維持します。
+一方、DB/trace/schemaの形式番号と、履歴の明示的な版付き適用条件は別の根拠です。
+未知の環境へ過去のlessonを無条件に適用するために、これらの条件を消してはいけません。
+
 一般pluginのentry pointはmoduleを公開し、MemoryProvider側はregister関数を公開します。Hermes 0.21の二つのloaderが受理する形が異なるためです。
 
 MemoryProviderの登録先は`hermes_kiokuko.memory_plugin:register`です。
@@ -88,6 +106,15 @@ doctorの`tool_publication`は、pluginのロード、3ツールの登録、`che
 PID、実行Python・package・profileを照合します。既存チャットのagentを同じプロセスで直接調べられなければ、`session_verification: unconfirmed`（実セッション未確認）、`memory_operations_available_in_session: null`です。`--load-plugin`の成功でも既存チャットの成功とは表示しません。同一プロセスの診断用APIは`diagnose(home, platform=agent.platform, agent=agent)`で実agentのprovider所有profile、公開schemaのsnapshotと検索scopeを確認できます。設定変更後は担当Hermes/Gatewayを再起動し、新規セッションで確認します。
 
 保存先は`$HERMES_HOME/kiokuko/kiokuko.db`です。CLIの`setup`またはprovider初期化が作成します。`kiokuko_propose`が返す`state: pending`は承認待ち候補です。既存の`approve`操作で表示内容を人が確認し、candidateの`accepted`と`promoted_entry_id`、entryの`cli_approved`を対応付けてから、正規`kiokuko_recall`で取得を確認します。DBに候補があるだけでは確定保存済みではありません。`@kiokuko remember`は別の明示保存経路であり、通常ツールの公開不備の代替にはしません。
+
+自然文の「覚えて」も、署名付きの完了同期後に承認待ち候補となります。承認前は自動検索・
+context投入の対象になりません。引用・文書形式など曖昧な入力や600文字超の本文は受動取得を
+見送ります。承認済みでもscope・関連性・pin・context上限によって取得されない場合があり、
+contextへの配信確認と回答での適用確認は別です。
+完了同期の保存フィルターが拒否した場合は、`doctor`の`sync_skips_and_errors`に原因コードを
+記録し、検証できたそのturnの監視だけを`incomplete`として閉じます。確定保存・同期完了・
+経験抽出の成功にはしません。署名不正・session不一致・最新rowに署名がない場合は、
+古いturnや別sessionの監視を代わりに閉じません。
 
 ## HOST_CONTRACT_MISMATCHの調査
 

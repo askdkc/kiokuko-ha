@@ -179,7 +179,7 @@ def test_real_http_tool_loop(host,http_model,monkeypatch):
         registry._tools.pop('monitor_test_check',None)
 
 
-def test_real_gateway_middleware_concurrent_scope(host,monkeypatch):
+def test_real_gateway_middleware_concurrent_scope(host,monkeypatch,logical_deadline_clock):
     home,_=host
     enable(home)
     from hermes_kiokuko.provider import KiokukoMemoryProvider

@@ -7,7 +7,7 @@ import time
 import pytest
 
 from hermes_kiokuko.config import load_config, write_yaml
-from hermes_kiokuko.deliveries import prepare as prepare_delivery, sync_completed
+from hermes_kiokuko.deliveries import prepare, sync_completed
 from hermes_kiokuko.errors import KiokukoError
 from hermes_kiokuko.models import Identity
 from hermes_kiokuko.profile_resolver import Candidate, decide, identifiers, relative_target
@@ -16,15 +16,8 @@ from hermes_kiokuko.task_profiles import (capture_completed, current_path, delet
 from hermes_kiokuko.workspace import resolve_workspace
 
 
-def prepare(*args, deadline=None, **kwargs):
-    # These tests cover profile decisions, not the production 150ms latency budget.
-    # Keep a bounded functional budget; test the real deadline separately below.
-    return prepare_delivery(*args, deadline=time.monotonic() + 5 if deadline is None else deadline,
-                            **kwargs)
-
-
 @pytest.fixture
-def profiles(service, tmp_path):
+def profiles(service, tmp_path, logical_deadline_clock):
     root = tmp_path / 'workspace'
     (root / 'src').mkdir(parents=True)
     (root / 'src' / 'widget.py').write_text('print(1)\n')
@@ -293,24 +286,23 @@ def test_candidate_budget_is_incomplete_and_replay_does_not_choose_new_source(se
     for index in range(65):complete(service,turn,session=f'source-{index}')
     query='`widget.py`'
     snap=turn(query,'consumer')
-    result=prepare(service,snap,query,deadline=__import__('time').monotonic()+2)
+    result=prepare(service,snap,query,deadline=time.monotonic()+2)
     assert 'Resolved target' not in result
     with service.transaction() as db:
         resolution=db.execute("SELECT * FROM task_profile_resolutions WHERE session_id='consumer'").fetchone()
         assert resolution['status']=='incomplete' and resolution['scanned']==64
         initial=[tuple(r) for r in db.execute('SELECT profile_id,target_index,decision FROM task_profile_candidates WHERE resolution_id=?',(resolution['id'],))]
     complete(service,turn,session='newest')
-    prepare(service,snap,query,deadline=__import__('time').monotonic()+2)
+    prepare(service,snap,query,deadline=time.monotonic()+2)
     with service.transaction() as db:
         assert initial==[tuple(r) for r in db.execute('SELECT profile_id,target_index,decision FROM task_profile_candidates WHERE resolution_id=?',(resolution['id'],))]
 
 
-@pytest.mark.parametrize('functional,budget,elapsed,expires', [
-    (False, None, .149, False), (False, None, .151, True),
-    (False, .3, .299, False), (False, .3, .301, True),
-    (True, None, .2, False), (True, .1, .2, True),
+@pytest.mark.parametrize('budget,elapsed,expires', [
+    (None, .149, False), (None, .15, True), (None, .151, True),
+    (.3, .299, False), (.3, .3, True), (.3, .301, True),
 ])
-def test_prepare_deadline_and_rollback(service, profiles, monkeypatch, functional, budget, elapsed, expires):
+def test_prepare_deadline_and_rollback(service, profiles, monkeypatch, budget, elapsed, expires):
     _, _, turn = profiles
     raw = 'Inspect `src/widget.py`'
     snap = turn(raw, 'deadline-consumer')
@@ -326,12 +318,11 @@ def test_prepare_deadline_and_rollback(service, profiles, monkeypatch, functiona
             # Model scheduling/IO time after writes, without a wall-clock sleep.
             clock[0] += elapsed
     monkeypatch.setattr(service, 'check_snapshot', delayed_final_validation)
-    action = prepare if functional else prepare_delivery
     kwargs = {} if budget is None else {'deadline': clock[0] + budget}
     if expires:
         with pytest.raises(KiokukoError, match='^DEADLINE_EXCEEDED$'):
-            action(service, snap, raw, **kwargs)
+            prepare(service, snap, raw, **kwargs)
     else:
-        assert 'KIOKUKO MEMORY POLICY:' in action(service, snap, raw, **kwargs)
+        assert 'KIOKUKO MEMORY POLICY:' in prepare(service, snap, raw, **kwargs)
     assert count(service, 'retrieval_deliveries') == (0 if expires else 1)
     assert count(service, 'task_profile_resolutions') == (0 if expires else 1)
